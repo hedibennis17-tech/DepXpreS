@@ -1,101 +1,160 @@
+/**
+ * POST /api/auth/driver/signup
+ * Crée un compte chauffeur : Firebase Auth + app_users + driver_profiles + driver_applications
+ * Équivalent Firebase de create_driver_profile() SQL
+ */
 import { NextRequest, NextResponse } from 'next/server';
 import { adminAuth, adminDb } from '@/lib/firebase-admin';
 import { FieldValue } from 'firebase-admin/firestore';
 
+type Body = {
+  email: string;
+  password: string;
+  firstName: string;
+  lastName: string;
+  phone?: string;
+};
+
 export async function POST(req: NextRequest) {
   try {
-    const body = await req.json();
-    const { email, password, firstName, lastName, phone } = body;
+    const body = (await req.json()) as Body;
+
+    const email     = body.email?.trim().toLowerCase();
+    const password  = body.password?.trim();
+    const firstName = body.firstName?.trim();
+    const lastName  = body.lastName?.trim();
+    const phone     = body.phone?.trim() || null;
 
     // Validation
-    if (!email || !password) {
-      return NextResponse.json({ error: 'Email et mot de passe requis.' }, { status: 400 });
-    }
-    if (password.length < 6) {
-      return NextResponse.json({ error: 'Le mot de passe doit contenir au moins 6 caractères.' }, { status: 400 });
+    if (!email || !password || !firstName || !lastName) {
+      return NextResponse.json(
+        { ok: false, error: 'MISSING_REQUIRED_FIELDS' },
+        { status: 400 }
+      );
     }
 
-    // 1. Créer l'utilisateur dans Firebase Auth
-    const userRecord = await adminAuth.createUser({
-      email: email.trim().toLowerCase(),
-      password,
-      displayName: firstName && lastName ? `${firstName} ${lastName}` : undefined,
-      phoneNumber: phone ? (phone.startsWith('+') ? phone : `+1${phone.replace(/\D/g, '')}`) : undefined,
-    });
+    if (password.length < 8) {
+      return NextResponse.json(
+        { ok: false, error: 'PASSWORD_TOO_SHORT' },
+        { status: 400 }
+      );
+    }
 
-    const uid = userRecord.uid;
+    const fullName = `${firstName} ${lastName}`.trim();
     const now = FieldValue.serverTimestamp();
 
-    // 2. Créer le document dans app_users
-    await adminDb.collection('app_users').doc(uid).set({
-      uid,
-      email: email.trim().toLowerCase(),
-      firstName: firstName || '',
-      lastName: lastName || '',
-      phone: phone || '',
+    // 1. Créer le compte Firebase Auth
+    let userRecord;
+    try {
+      userRecord = await adminAuth.createUser({
+        email,
+        password,
+        displayName: fullName,
+        phoneNumber: phone ? (phone.startsWith('+') ? phone : `+1${phone.replace(/\D/g, '')}`) : undefined,
+        emailVerified: false,
+      });
+    } catch (authError: unknown) {
+      const err = authError as { code?: string; message?: string };
+      if (err.code === 'auth/email-already-exists') {
+        return NextResponse.json(
+          { ok: false, error: 'EMAIL_ALREADY_EXISTS' },
+          { status: 409 }
+        );
+      }
+      if (err.code === 'auth/invalid-email') {
+        return NextResponse.json({ ok: false, error: 'INVALID_EMAIL' }, { status: 400 });
+      }
+      return NextResponse.json(
+        { ok: false, error: err.message || 'AUTH_CREATE_FAILED' },
+        { status: 400 }
+      );
+    }
+
+    const userId = userRecord.uid;
+
+    // 2. Créer app_users + driver_profiles + driver_applications dans Firestore (batch atomique)
+    const batch = adminDb.batch();
+
+    // app_users — structure identique au schéma SQL
+    const appUserRef = adminDb.collection('app_users').doc(userId);
+    batch.set(appUserRef, {
+      id: userId,
+      email,
+      phone,
+      display_name: fullName,
+      first_name: firstName,
+      last_name: lastName,
       primary_role: 'driver',
       status: 'active',
       is_email_verified: false,
+      is_phone_verified: false,
+      created_by: null,
       created_at: now,
       updated_at: now,
     });
 
-    // 3. Créer le profil chauffeur dans driver_profiles
-    await adminDb.collection('driver_profiles').doc(uid).set({
-      id: uid,
-      userId: uid,
-      firstName: firstName || '',
-      lastName: lastName || '',
-      email: email.trim().toLowerCase(),
-      phone: phone || '',
-      status: 'offline',
-      isOnline: false,
-      rating: 0,
-      totalDeliveries: 0,
-      totalEarnings: 0,
-      applicationStatus: 'pending',
-      joinedAt: now,
-      createdAt: now,
-      updatedAt: now,
-    });
-
-    // 4. Créer la candidature dans driver_applications
-    await adminDb.collection('driver_applications').add({
-      driverId: uid,
-      email: email.trim().toLowerCase(),
-      firstName: firstName || '',
-      lastName: lastName || '',
-      phone: phone || '',
+    // driver_profiles — structure identique au schéma SQL
+    const driverProfileRef = adminDb.collection('driver_profiles').doc(userId);
+    batch.set(driverProfileRef, {
+      user_id: userId,
+      full_name: fullName,
       application_status: 'draft',
       driver_status: 'offline',
+      availability_status: 'available',
       verification_status: 'pending',
-      submittedAt: now,
-      createdAt: now,
-      updatedAt: now,
+      current_zone_id: null,
+      current_order_id: null,
+      wallet_id: null,
+      rating_average: 0,
+      rating_count: 0,
+      total_deliveries: 0,
+      created_at: now,
+      updated_at: now,
     });
 
-    // 5. Définir le custom claim de rôle
-    await adminAuth.setCustomUserClaims(uid, { role: 'driver' });
+    // driver_applications — structure identique au schéma SQL
+    const appRef = adminDb.collection('driver_applications').doc(userId);
+    batch.set(appRef, {
+      id: userId,
+      user_id: userId,
+      step: 1,
+      status: 'draft',
+      review_status: 'pending',
+      submitted_at: null,
+      reviewed_by: null,
+      reviewed_at: null,
+      notes: null,
+      created_at: now,
+      updated_at: now,
+    });
+
+    try {
+      await batch.commit();
+    } catch (dbError) {
+      // Rollback : supprimer le compte Firebase Auth si Firestore échoue
+      await adminAuth.deleteUser(userId).catch(() => {});
+      console.error('Firestore batch error:', dbError);
+      return NextResponse.json(
+        { ok: false, error: 'PROFILE_CREATE_FAILED' },
+        { status: 500 }
+      );
+    }
+
+    // 3. Définir le custom claim role dans Firebase Auth
+    await adminAuth.setCustomUserClaims(userId, { role: 'driver' });
 
     return NextResponse.json({
-      success: true,
-      uid,
-      message: 'Compte chauffeur créé avec succès.',
+      ok: true,
+      userId,
+      role: 'driver',
+      nextStep: '/driver/wizard/personal',
     }, { status: 201 });
 
-  } catch (error: any) {
-    console.error('Driver signup error:', error);
-
-    if (error.code === 'auth/email-already-exists') {
-      return NextResponse.json({ error: 'Cette adresse email est déjà utilisée.' }, { status: 409 });
-    }
-    if (error.code === 'auth/invalid-email') {
-      return NextResponse.json({ error: 'Adresse email invalide.' }, { status: 400 });
-    }
-    if (error.code === 'auth/weak-password') {
-      return NextResponse.json({ error: 'Mot de passe trop faible.' }, { status: 400 });
-    }
-
-    return NextResponse.json({ error: 'Erreur lors de la création du compte.' }, { status: 500 });
+  } catch (error) {
+    console.error('Signup driver error:', error);
+    return NextResponse.json(
+      { ok: false, error: 'INTERNAL_SERVER_ERROR' },
+      { status: 500 }
+    );
   }
 }

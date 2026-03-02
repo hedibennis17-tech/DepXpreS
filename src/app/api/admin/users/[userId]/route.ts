@@ -1,188 +1,241 @@
+/**
+ * GET    /api/admin/users/[userId]  — Profil complet d'un utilisateur (users.read)
+ * PATCH  /api/admin/users/[userId]  — Modifier le statut, rôle, permissions (users.write)
+ * DELETE /api/admin/users/[userId]  — Supprimer un utilisateur (super_admin uniquement)
+ */
 import { NextRequest, NextResponse } from 'next/server';
 import { adminAuth, adminDb } from '@/lib/firebase-admin';
 import { FieldValue } from 'firebase-admin/firestore';
+import { requirePermission, requireSuperAdmin, handleAuthError } from '@/lib/auth/auth-guards';
 
-const ADMIN_ROLES = ['super_admin', 'admin', 'dispatcher', 'agent'];
+type Params = { params: Promise<{ userId: string }> };
 
-function getSessionRole(req: NextRequest): { uid: string; role: string } | null {
-  const cookie = req.cookies.get('admin_session')?.value;
-  if (!cookie) return null;
-  const [uid, role] = cookie.split(':');
-  if (!uid || !role) return null;
-  return { uid, role };
-}
-
-// GET /api/admin/users/[userId] - Voir un utilisateur
-export async function GET(
-  req: NextRequest,
-  { params }: { params: Promise<{ userId: string }> }
-) {
-  const session = getSessionRole(req);
-  if (!session || !ADMIN_ROLES.includes(session.role)) {
-    return NextResponse.json({ error: 'Non autorisé.' }, { status: 401 });
-  }
-
-  const { userId } = await params;
-
+// ============================================================
+// GET /api/admin/users/[userId]
+// ============================================================
+export async function GET(req: NextRequest, { params }: Params) {
   try {
+    await requirePermission(req, 'users.read');
+    const { userId } = await params;
+
     const userDoc = await adminDb.collection('app_users').doc(userId).get();
     if (!userDoc.exists) {
-      return NextResponse.json({ error: 'Utilisateur introuvable.' }, { status: 404 });
+      return NextResponse.json({ ok: false, error: 'Utilisateur introuvable.' }, { status: 404 });
     }
 
     const data = userDoc.data()!;
 
-    // Récupérer le profil lié selon le rôle
+    // Récupérer le profil spécifique selon le rôle
     let profile = null;
     if (data.primary_role === 'client') {
-      const profileDoc = await adminDb.collection('client_profiles').doc(userId).get();
-      if (profileDoc.exists) profile = profileDoc.data();
+      const p = await adminDb.collection('client_profiles').doc(userId).get();
+      if (p.exists) profile = p.data();
     } else if (data.primary_role === 'driver') {
-      const profileDoc = await adminDb.collection('driver_profiles').doc(userId).get();
-      if (profileDoc.exists) profile = profileDoc.data();
-    } else {
-      const profileDoc = await adminDb.collection('admin_profiles').doc(userId).get();
-      if (profileDoc.exists) profile = profileDoc.data();
+      const p = await adminDb.collection('driver_profiles').doc(userId).get();
+      if (p.exists) profile = p.data();
+    } else if (['admin', 'dispatcher', 'agent', 'super_admin'].includes(data.primary_role)) {
+      const p = await adminDb.collection('admin_profiles').doc(userId).get();
+      if (p.exists) profile = p.data();
     }
 
     return NextResponse.json({
-      id: userDoc.id,
-      uid: data.uid,
-      email: data.email,
-      firstName: data.firstName,
-      lastName: data.lastName,
-      phone: data.phone,
-      primary_role: data.primary_role,
-      status: data.status,
-      is_email_verified: data.is_email_verified,
-      last_login: data.last_login,
-      created_at: data.created_at,
+      ok: true,
+      user: {
+        id: userId,
+        email: data.email,
+        phone: data.phone,
+        display_name: data.display_name,
+        first_name: data.first_name,
+        last_name: data.last_name,
+        primary_role: data.primary_role,
+        status: data.status,
+        is_email_verified: data.is_email_verified,
+        is_phone_verified: data.is_phone_verified,
+        created_at: data.created_at,
+        updated_at: data.updated_at,
+      },
       profile,
     });
+
   } catch (error) {
-    console.error('Get user error:', error);
-    return NextResponse.json({ error: 'Erreur lors de la récupération.' }, { status: 500 });
+    return handleAuthError(error);
   }
 }
 
-// PATCH /api/admin/users/[userId] - Modifier un utilisateur
-export async function PATCH(
-  req: NextRequest,
-  { params }: { params: Promise<{ userId: string }> }
-) {
-  const session = getSessionRole(req);
-  if (!session || !ADMIN_ROLES.includes(session.role)) {
-    return NextResponse.json({ error: 'Non autorisé.' }, { status: 401 });
-  }
+// ============================================================
+// PATCH /api/admin/users/[userId]
+// Actions : block, unblock, suspend, activate, change_role, reset_password, update_permissions
+// ============================================================
+type PatchBody = {
+  action: 'block' | 'unblock' | 'suspend' | 'activate' | 'change_role' | 'reset_password' | 'update_permissions';
+  role?: string;
+  new_password?: string;
+  reason?: string;
+  permissions?: Record<string, boolean>;
+};
 
-  const { userId } = await params;
-
+export async function PATCH(req: NextRequest, { params }: Params) {
   try {
-    const body = await req.json();
-    const { action, status, role, newPassword, permissions } = body;
+    const authUser = await requirePermission(req, 'users.write');
+    const { userId } = await params;
+    const body = (await req.json()) as PatchBody;
+    const { action } = body;
+
+    if (!action) {
+      return NextResponse.json({ ok: false, error: 'Action requise.' }, { status: 400 });
+    }
 
     const userDoc = await adminDb.collection('app_users').doc(userId).get();
     if (!userDoc.exists) {
-      return NextResponse.json({ error: 'Utilisateur introuvable.' }, { status: 404 });
+      return NextResponse.json({ ok: false, error: 'Utilisateur introuvable.' }, { status: 404 });
     }
 
-    const userData = userDoc.data()!;
+    const now = FieldValue.serverTimestamp();
 
-    // Action: bloquer
-    if (action === 'block') {
-      await adminDb.collection('app_users').doc(userId).update({
-        status: 'blocked',
-        updated_at: FieldValue.serverTimestamp(),
-      });
-      await adminAuth.updateUser(userId, { disabled: true });
-      return NextResponse.json({ success: true, message: 'Compte bloqué.' });
-    }
+    switch (action) {
 
-    // Action: débloquer
-    if (action === 'unblock') {
-      await adminDb.collection('app_users').doc(userId).update({
-        status: 'active',
-        updated_at: FieldValue.serverTimestamp(),
-      });
-      await adminAuth.updateUser(userId, { disabled: false });
-      return NextResponse.json({ success: true, message: 'Compte débloqué.' });
-    }
-
-    // Action: reset mot de passe (super_admin uniquement)
-    if (action === 'reset_password') {
-      if (session.role !== 'super_admin') {
-        return NextResponse.json({ error: 'Seul le super admin peut réinitialiser les mots de passe.' }, { status: 403 });
+      // ---- BLOQUER ----
+      case 'block': {
+        await adminDb.collection('app_users').doc(userId).update({
+          status: 'blocked',
+          blocked_by: authUser.uid,
+          blocked_at: now,
+          block_reason: body.reason || null,
+          updated_at: now,
+        });
+        await adminAuth.updateUser(userId, { disabled: true });
+        return NextResponse.json({ ok: true, message: 'Utilisateur bloqué.' });
       }
-      if (!newPassword || newPassword.length < 8) {
-        return NextResponse.json({ error: 'Nouveau mot de passe requis (min 8 caractères).' }, { status: 400 });
+
+      // ---- DÉBLOQUER ----
+      case 'unblock': {
+        await adminDb.collection('app_users').doc(userId).update({
+          status: 'active',
+          blocked_by: null,
+          blocked_at: null,
+          block_reason: null,
+          updated_at: now,
+        });
+        await adminAuth.updateUser(userId, { disabled: false });
+        return NextResponse.json({ ok: true, message: 'Utilisateur débloqué.' });
       }
-      await adminAuth.updateUser(userId, { password: newPassword });
-      return NextResponse.json({ success: true, message: 'Mot de passe réinitialisé.' });
+
+      // ---- SUSPENDRE ----
+      case 'suspend': {
+        await adminDb.collection('app_users').doc(userId).update({
+          status: 'suspended',
+          suspended_by: authUser.uid,
+          suspended_at: now,
+          suspend_reason: body.reason || null,
+          updated_at: now,
+        });
+        await adminAuth.updateUser(userId, { disabled: true });
+        return NextResponse.json({ ok: true, message: 'Utilisateur suspendu.' });
+      }
+
+      // ---- ACTIVER ----
+      case 'activate': {
+        await adminDb.collection('app_users').doc(userId).update({
+          status: 'active',
+          updated_at: now,
+        });
+        await adminAuth.updateUser(userId, { disabled: false });
+        return NextResponse.json({ ok: true, message: 'Utilisateur activé.' });
+      }
+
+      // ---- CHANGER LE RÔLE (super_admin uniquement) ----
+      case 'change_role': {
+        if (authUser.role !== 'super_admin') {
+          return NextResponse.json(
+            { ok: false, error: 'Seul le super_admin peut changer les rôles.' },
+            { status: 403 }
+          );
+        }
+        const newRole = body.role;
+        if (!newRole || !['admin', 'dispatcher', 'agent', 'client', 'driver'].includes(newRole)) {
+          return NextResponse.json({ ok: false, error: 'Rôle invalide.' }, { status: 400 });
+        }
+        const batch = adminDb.batch();
+        batch.update(adminDb.collection('app_users').doc(userId), {
+          primary_role: newRole,
+          updated_at: now,
+        });
+        // Mettre à jour admin_profiles si c'est un rôle admin
+        if (['admin', 'dispatcher', 'agent'].includes(newRole)) {
+          const adminProfileRef = adminDb.collection('admin_profiles').doc(userId);
+          batch.set(adminProfileRef, { role_key: newRole, updated_at: now }, { merge: true });
+        }
+        await batch.commit();
+        await adminAuth.setCustomUserClaims(userId, { role: newRole });
+        return NextResponse.json({ ok: true, message: `Rôle changé en ${newRole}.` });
+      }
+
+      // ---- RÉINITIALISER LE MOT DE PASSE ----
+      case 'reset_password': {
+        const newPassword = body.new_password;
+        if (!newPassword || newPassword.length < 8) {
+          return NextResponse.json(
+            { ok: false, error: 'Nouveau mot de passe invalide (min. 8 caractères).' },
+            { status: 400 }
+          );
+        }
+        await adminAuth.updateUser(userId, { password: newPassword });
+        await adminDb.collection('app_users').doc(userId).update({
+          password_reset_at: now,
+          password_reset_by: authUser.uid,
+          updated_at: now,
+        });
+        return NextResponse.json({ ok: true, message: 'Mot de passe réinitialisé.' });
+      }
+
+      // ---- METTRE À JOUR LES PERMISSIONS (super_admin et admin) ----
+      case 'update_permissions': {
+        if (!['super_admin', 'admin'].includes(authUser.role)) {
+          return NextResponse.json(
+            { ok: false, error: 'Accès refusé pour modifier les permissions.' },
+            { status: 403 }
+          );
+        }
+        if (!body.permissions) {
+          return NextResponse.json({ ok: false, error: 'Permissions requises.' }, { status: 400 });
+        }
+        await adminDb.collection('admin_profiles').doc(userId).set(
+          { permissions: body.permissions, updated_at: now },
+          { merge: true }
+        );
+        return NextResponse.json({ ok: true, message: 'Permissions mises à jour.' });
+      }
+
+      default:
+        return NextResponse.json({ ok: false, error: 'Action inconnue.' }, { status: 400 });
     }
 
-    // Action: changer le rôle (super_admin uniquement)
-    if (action === 'change_role') {
-      if (session.role !== 'super_admin') {
-        return NextResponse.json({ error: 'Seul le super admin peut changer les rôles.' }, { status: 403 });
-      }
-      const allowedRoles = ['admin', 'dispatcher', 'agent'];
-      if (!role || !allowedRoles.includes(role)) {
-        return NextResponse.json({ error: 'Rôle invalide.' }, { status: 400 });
-      }
-      await adminDb.collection('app_users').doc(userId).update({
-        primary_role: role,
-        updated_at: FieldValue.serverTimestamp(),
-      });
-      await adminDb.collection('admin_profiles').doc(userId).update({
-        role,
-        updated_at: FieldValue.serverTimestamp(),
-      });
-      await adminAuth.setCustomUserClaims(userId, { role });
-      return NextResponse.json({ success: true, message: `Rôle changé en ${role}.` });
-    }
-
-    // Action: mettre à jour les permissions (super_admin et admin)
-    if (action === 'update_permissions') {
-      if (session.role !== 'super_admin' && session.role !== 'admin') {
-        return NextResponse.json({ error: 'Accès refusé.' }, { status: 403 });
-      }
-      await adminDb.collection('admin_profiles').doc(userId).update({
-        permissions,
-        updated_at: FieldValue.serverTimestamp(),
-      });
-      return NextResponse.json({ success: true, message: 'Permissions mises à jour.' });
-    }
-
-    return NextResponse.json({ error: 'Action non reconnue.' }, { status: 400 });
   } catch (error) {
-    console.error('Update user error:', error);
-    return NextResponse.json({ error: 'Erreur lors de la mise à jour.' }, { status: 500 });
+    return handleAuthError(error);
   }
 }
 
-// DELETE /api/admin/users/[userId] - Supprimer un utilisateur (super_admin uniquement)
-export async function DELETE(
-  req: NextRequest,
-  { params }: { params: Promise<{ userId: string }> }
-) {
-  const session = getSessionRole(req);
-  if (!session || session.role !== 'super_admin') {
-    return NextResponse.json({ error: 'Seul le super admin peut supprimer des comptes.' }, { status: 403 });
-  }
-
-  const { userId } = await params;
-
+// ============================================================
+// DELETE /api/admin/users/[userId] — super_admin uniquement
+// ============================================================
+export async function DELETE(req: NextRequest, { params }: Params) {
   try {
-    // Supprimer de Firebase Auth
-    await adminAuth.deleteUser(userId);
+    await requireSuperAdmin(req);
+    const { userId } = await params;
 
-    // Supprimer de Firestore
-    await adminDb.collection('app_users').doc(userId).delete();
-    await adminDb.collection('admin_profiles').doc(userId).delete();
+    // Soft delete dans Firestore (préserver les données pour audit)
+    await adminDb.collection('app_users').doc(userId).update({
+      status: 'deleted',
+      deleted_at: FieldValue.serverTimestamp(),
+      updated_at: FieldValue.serverTimestamp(),
+    });
 
-    return NextResponse.json({ success: true, message: 'Compte supprimé.' });
+    // Désactiver dans Firebase Auth (ne pas supprimer pour préserver l'historique)
+    await adminAuth.updateUser(userId, { disabled: true });
+
+    return NextResponse.json({ ok: true, message: 'Utilisateur supprimé (soft delete).' });
+
   } catch (error) {
-    console.error('Delete user error:', error);
-    return NextResponse.json({ error: 'Erreur lors de la suppression.' }, { status: 500 });
+    return handleAuthError(error);
   }
 }
