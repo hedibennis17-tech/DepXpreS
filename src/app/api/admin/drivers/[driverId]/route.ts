@@ -100,6 +100,8 @@ export async function PATCH(
       "applicationStatus", "verificationStatus", "status",
       "isOnline", "availabilityStatus", "zoneId", "zoneName",
       "notes", "suspensionReason",
+      "email", "firstName", "lastName", "phone",
+      "passwordHint", "authUid", "accountCreated",
     ];
 
     const updates: Record<string, unknown> = {};
