@@ -23,7 +23,8 @@ export type PermissionKey =
   | 'reports.read'
   | 'users.read' | 'users.create' | 'users.write'
   | 'profile.read' | 'profile.write'
-  | 'location.write';
+  | 'location.write'
+  | 'store_settlements.read' | 'store_settlements.write';
 
 export interface RoleDefinition {
   role_key: RoleKey;
@@ -52,6 +53,7 @@ export const ROLE_PERMISSIONS: Record<RoleKey, PermissionKey[]> = {
     'zones.read', 'zones.write',
     'dispatch.read', 'dispatch.write',
     'transactions.read',
+    'store_settlements.read', 'store_settlements.write',
     'refunds.write',
     'promotions.read', 'promotions.write',
     'notifications.read', 'notifications.write',
@@ -67,6 +69,7 @@ export const ROLE_PERMISSIONS: Record<RoleKey, PermissionKey[]> = {
     'dispatch.read', 'dispatch.write',
     'stores.read',
     'zones.read',
+    'store_settlements.read', 'store_settlements.write',
     'notifications.read', 'notifications.write',
   ],
 
