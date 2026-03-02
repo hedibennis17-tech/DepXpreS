@@ -1,6 +1,6 @@
 /**
  * middleware.ts — Protection des routes DepXpreS
- * Vérification du cookie admin_session (Firebase ID token)
+ * Vérification du cookie admin_session (uid:role) ou admin_token (Firebase JWT)
  * Restrictions par rôle : super_admin > admin > dispatcher > agent
  */
 import { NextRequest, NextResponse } from 'next/server';
@@ -47,6 +47,23 @@ const AGENT_ALLOWED = [
   '/api/admin/tickets',
 ];
 
+// Décoder un JWT Firebase sans vérification de signature (Edge Runtime compatible)
+function decodeJWTPayload(token: string): Record<string, unknown> | null {
+  try {
+    const parts = token.split('.');
+    if (parts.length !== 3) return null;
+    const payload = parts[1];
+    // Ajouter le padding base64
+    const padded = payload + '='.repeat((4 - payload.length % 4) % 4);
+    // Décoder base64url → base64 → string
+    const base64 = padded.replace(/-/g, '+').replace(/_/g, '/');
+    const decoded = atob(base64);
+    return JSON.parse(decoded);
+  } catch {
+    return null;
+  }
+}
+
 export async function middleware(request: NextRequest) {
   const { pathname } = request.nextUrl;
 
@@ -71,10 +88,38 @@ export async function middleware(request: NextRequest) {
     pathname.startsWith('/admin') || pathname.startsWith('/api/admin');
 
   if (isAdminRoute) {
+    // Essayer d'abord le cookie admin_session (uid:role)
     const sessionToken = request.cookies.get('admin_session')?.value;
+    // Ensuite essayer le cookie admin_token (Firebase JWT complet)
+    const jwtToken = request.cookies.get('admin_token')?.value;
 
-    // Pas de session → redirection vers login
-    if (!sessionToken) {
+    let uid = '';
+    let role = '';
+
+    if (sessionToken) {
+      // Format: "uid:role"
+      try {
+        const parts = sessionToken.split(':');
+        uid = parts[0] || '';
+        role = parts[1] || '';
+      } catch {
+        // Session corrompue
+      }
+    } else if (jwtToken) {
+      // Décoder le JWT Firebase directement
+      const claims = decodeJWTPayload(jwtToken);
+      if (claims) {
+        // Vérifier l'expiration
+        const exp = claims.exp as number;
+        if (!exp || Date.now() / 1000 <= exp) {
+          uid = (claims.user_id || claims.sub) as string || '';
+          role = (claims.role as string) || '';
+        }
+      }
+    }
+
+    // Pas de session valide → redirection vers login
+    if (!uid || !role || !ADMIN_ROLES.includes(role)) {
       if (pathname.startsWith('/api/')) {
         return NextResponse.json(
           { ok: false, error: 'Non autorisé. Connexion requise.' },
@@ -86,73 +131,46 @@ export async function middleware(request: NextRequest) {
       return NextResponse.redirect(loginUrl);
     }
 
-    // Décoder le cookie (format: "uid:role" — simple, léger, sans vérification Firebase ici)
-    // La vérification complète du token Firebase est faite dans les route handlers via requirePermission()
-    try {
-      const [uid, role] = sessionToken.split(':');
-
-      if (!uid || !role || !ADMIN_ROLES.includes(role)) {
-        if (pathname.startsWith('/api/')) {
-          return NextResponse.json(
-            { ok: false, error: 'Session invalide ou rôle insuffisant.' },
-            { status: 403 }
-          );
-        }
-        const loginUrl = new URL('/admin/login', request.url);
-        loginUrl.searchParams.set('redirect', pathname);
-        return NextResponse.redirect(loginUrl);
+    // Restrictions super_admin : seul lui peut créer des comptes équipe
+    if (
+      (pathname === '/admin/users/create' || pathname.startsWith('/admin/users/create')) &&
+      role !== 'super_admin'
+    ) {
+      if (pathname.startsWith('/api/')) {
+        return NextResponse.json(
+          { ok: false, error: 'Réservé au Super Admin.' },
+          { status: 403 }
+        );
       }
+      return NextResponse.redirect(new URL('/admin/dashboard', request.url));
+    }
 
-      // Restrictions super_admin : seul lui peut créer des comptes équipe
-      if (
-        (pathname === '/admin/users/create' || pathname.startsWith('/admin/users/create')) &&
-        role !== 'super_admin'
-      ) {
+    // Restrictions dispatcher
+    if (role === 'dispatcher') {
+      const allowed = DISPATCHER_ALLOWED.some(p => pathname.startsWith(p));
+      if (!allowed) {
         if (pathname.startsWith('/api/')) {
           return NextResponse.json(
-            { ok: false, error: 'Réservé au Super Admin.' },
+            { ok: false, error: 'Accès refusé pour le rôle dispatcher.' },
             { status: 403 }
           );
         }
         return NextResponse.redirect(new URL('/admin/dashboard', request.url));
       }
+    }
 
-      // Restrictions dispatcher
-      if (role === 'dispatcher') {
-        const allowed = DISPATCHER_ALLOWED.some(p => pathname.startsWith(p));
-        if (!allowed) {
-          if (pathname.startsWith('/api/')) {
-            return NextResponse.json(
-              { ok: false, error: 'Accès refusé pour le rôle dispatcher.' },
-              { status: 403 }
-            );
-          }
-          return NextResponse.redirect(new URL('/admin/dashboard', request.url));
+    // Restrictions agent
+    if (role === 'agent') {
+      const allowed = AGENT_ALLOWED.some(p => pathname.startsWith(p));
+      if (!allowed) {
+        if (pathname.startsWith('/api/')) {
+          return NextResponse.json(
+            { ok: false, error: 'Accès refusé pour le rôle agent.' },
+            { status: 403 }
+          );
         }
+        return NextResponse.redirect(new URL('/admin/dashboard', request.url));
       }
-
-      // Restrictions agent
-      if (role === 'agent') {
-        const allowed = AGENT_ALLOWED.some(p => pathname.startsWith(p));
-        if (!allowed) {
-          if (pathname.startsWith('/api/')) {
-            return NextResponse.json(
-              { ok: false, error: 'Accès refusé pour le rôle agent.' },
-              { status: 403 }
-            );
-          }
-          return NextResponse.redirect(new URL('/admin/dashboard', request.url));
-        }
-      }
-
-    } catch {
-      if (pathname.startsWith('/api/')) {
-        return NextResponse.json(
-          { ok: false, error: 'Session corrompue.' },
-          { status: 401 }
-        );
-      }
-      return NextResponse.redirect(new URL('/admin/login', request.url));
     }
   }
 

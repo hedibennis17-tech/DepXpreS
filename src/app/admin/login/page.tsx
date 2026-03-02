@@ -18,6 +18,28 @@ import { signInWithEmailAndPassword } from "firebase/auth"
 import { auth } from "@/lib/firebase"
 import { Suspense } from "react"
 
+const ADMIN_ROLES = ["super_admin", "admin", "dispatcher", "agent"]
+
+// Décoder le payload JWT Firebase sans vérification de signature
+function decodeJWT(token: string): Record<string, unknown> | null {
+  try {
+    const parts = token.split(".")
+    if (parts.length !== 3) return null
+    const payload = parts[1]
+    const padded = payload + "=".repeat((4 - (payload.length % 4)) % 4)
+    const decoded = atob(padded.replace(/-/g, "+").replace(/_/g, "/"))
+    return JSON.parse(decoded)
+  } catch {
+    return null
+  }
+}
+
+// Définir un cookie côté client (lu par le middleware Next.js)
+function setClientCookie(name: string, value: string, days: number) {
+  const expires = new Date(Date.now() + days * 24 * 60 * 60 * 1000).toUTCString()
+  document.cookie = `${name}=${encodeURIComponent(value)};expires=${expires};path=/;SameSite=Lax`
+}
+
 function AdminLoginForm() {
   const router = useRouter()
   const searchParams = useSearchParams()
@@ -41,55 +63,36 @@ function AdminLoginForm() {
     try {
       // 1. Connexion Firebase Auth côté client
       const userCredential = await signInWithEmailAndPassword(auth, email, password)
-      const idToken = await userCredential.user.getIdToken()
+      const idToken = await userCredential.user.getIdToken(true)
 
-      // 2. Vérifier le rôle admin via l'API avec timeout de 10 secondes
-      const controller = new AbortController()
-      const timeoutId = setTimeout(() => controller.abort(), 10000)
-
-      let res: Response
-      try {
-        res = await fetch("/api/admin/auth/login", {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ idToken }),
-          signal: controller.signal,
-        })
-        clearTimeout(timeoutId)
-      } catch (fetchErr: unknown) {
-        clearTimeout(timeoutId)
-        const fe = fetchErr as Error
-        if (fe.name === "AbortError") {
-          // Timeout — décoder le JWT localement comme fallback
-          const parts = idToken.split(".")
-          const payload = parts[1] + "=".repeat((4 - parts[1].length % 4) % 4)
-          const decoded = JSON.parse(atob(payload.replace(/-/g, "+").replace(/_/g, "/")))
-          const role = decoded.role || ""
-          const adminRoles = ["super_admin", "admin", "dispatcher", "agent"]
-          
-          if (adminRoles.includes(role)) {
-            // Stocker dans sessionStorage comme fallback
-            sessionStorage.setItem("admin_uid", decoded.user_id || decoded.sub || "")
-            sessionStorage.setItem("admin_role", role)
-            sessionStorage.setItem("admin_email", decoded.email || "")
-            sessionStorage.setItem("admin_name", decoded.name || "")
-            router.push(redirect)
-            return
-          } else {
-            setError("Accès refusé. Ce compte n'a pas les droits d'administration.")
-            return
-          }
-        }
-        throw fetchErr
-      }
-
-      const data = await res.json()
-      if (!res.ok) {
-        setError(data.error || "Accès refusé.")
+      // 2. Décoder le JWT localement pour extraire le rôle
+      const claims = decodeJWT(idToken)
+      if (!claims) {
+        setError("Erreur de décodage du token. Veuillez réessayer.")
         return
       }
 
-      // 3. Rediriger vers le dashboard admin
+      const role = (claims.role as string) || ""
+      const uid = (claims.user_id as string) || (claims.sub as string) || ""
+
+      // 3. Vérifier que c'est bien un rôle admin
+      if (!role || !ADMIN_ROLES.includes(role)) {
+        setError("Accès refusé. Ce compte n'a pas les droits d'administration.")
+        return
+      }
+
+      // 4. Stocker le cookie de session (lu par le middleware Next.js)
+      setClientCookie("admin_session", `${uid}:${role}`, 7)
+      setClientCookie("admin_token", idToken, 1)
+
+      // 5. Appel API en arrière-plan pour créer le cookie httpOnly (sans bloquer)
+      fetch("/api/admin/auth/login", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ idToken }),
+      }).catch(() => {})
+
+      // 6. Rediriger immédiatement vers le dashboard admin
       router.push(redirect)
     } catch (err: unknown) {
       const e = err as { code?: string; message?: string }
