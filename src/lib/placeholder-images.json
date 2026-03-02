@@ -1,0 +1,124 @@
+{
+  "placeholderImages": [
+    {
+      "id": "user-avatar-1",
+      "description": "User avatar 1",
+      "imageUrl": "https://images.unsplash.com/photo-1544005313-94ddf0286df2?crop=entropy&cs=tinysrgb&fit=max&fm=jpg&ixid=M3w3NDE5ODJ8MHwxfHNlYXJjaHw4fHxwZXJzb24lMjBwb3J0cmFpdHxlbnwwfHx8fDE3NzIzNjE1NzN8MA&ixlib=rb-4.1.0&q=80&w=1080",
+      "imageHint": "person portrait"
+    },
+    {
+      "id": "user-avatar-2",
+      "description": "User avatar 2",
+      "imageUrl": "https://images.unsplash.com/photo-1544717304-a2db4a7b16ee?crop=entropy&cs=tinysrgb&fit=max&fm=jpg&ixid=M3w3NDE5ODJ8MHwxfHNlYXJjaHw5fHx3b21hbiUyMGZhY2V8ZW58MHx8fHwxNzcyMzUzMjg0fDA&ixlib=rb-4.1.0&q=80&w=1080",
+      "imageHint": "woman face"
+    },
+    {
+      "id": "user-avatar-3",
+      "description": "User avatar 3",
+      "imageUrl": "https://images.unsplash.com/photo-1621624666561-84d0107001dc?crop=entropy&cs=tinysrgb&fit=max&fm=jpg&ixid=M3w3NDE5ODJ8MHwxfHNlYXJjaHw5fHxtYW4lMjBzbWlsaW5nfGVufDB8fHx8MTc3MjM4ODI3NHww&ixlib=rb-4.1.0&q=80&w=1080",
+      "imageHint": "man smiling"
+    },
+    {
+      "id": "map-placeholder",
+      "description": "Placeholder map showing a city area",
+      "imageUrl": "https://images.unsplash.com/photo-1522678073884-26b1b87526e4?crop=entropy&cs=tinysrgb&fit=max&fm=jpg&ixid=M3w3NDE5ODJ8MHwxfHNlYXJjaHw5fHxjaXR5JTIwbWFwfGVufDB8fHx8MTc3MjI5OTQ1NHww&ixlib=rb-4.1.0&q=80&w=1080",
+      "imageHint": "city map"
+    },
+    {
+      "id": "heineken-6-pack",
+      "description": "6-pack of Heineken beer bottles",
+      "imageUrl": "https://images.unsplash.com/photo-1546339166-72eaf6a67c3c?crop=entropy&cs=tinysrgb&fit=max&fm=jpg&ixid=M3w3NDE5ODJ8MHwxfHNlYXJjaHwxfHxiZWVyJTIwYm90dGxlc3xlbnwwfHx8fDE3NzI0MTMzMzh8MA&ixlib=rb-4.1.0&q=80&w=1080",
+      "imageHint": "beer bottles"
+    },
+    {
+      "id": "corona-6-pack",
+      "description": "6-pack of Corona beer bottles",
+      "imageUrl": "https://images.unsplash.com/photo-1571613316887-6f8d5cbf7ef7?crop=entropy&cs=tinysrgb&fit=max&fm=jpg&ixid=M3w3NDE5ODJ8MHwxfHNlYXJjaHwxfHxiZWVyfGVufDB8fHx8MTc3MjQxMzMzOHww&ixlib=rb-4.1.0&q=80&w=1080",
+      "imageHint": "beer"
+    },
+    {
+      "id": "red-wine-750ml",
+      "description": "Bottle of red wine",
+      "imageUrl": "https://images.unsplash.com/photo-1628187832510-94b4d90445af?crop=entropy&cs=tinysrgb&fit=max&fm=jpg&ixid=M3w3NDE5ODJ8MHwxfHNlYXJjaHw2fHx3aW5lJTIwYm90dGxlfGVufDB8fHx8MTc3MjQxMzMzOHww&ixlib=rb-4.1.0&q=80&w=1080",
+      "imageHint": "wine bottle"
+    },
+    {
+      "id": "vodka-mini",
+      "description": "Miniature bottle of vodka",
+      "imageUrl": "https://images.unsplash.com/photo-1609872582579-2308ba347c1b?crop=entropy&cs=tinysrgb&fit=max&fm=jpg&ixid=M3w3NDE5ODJ8MHwxfHNlYXJjaHw5fHxsaXF1b3IlMjBib3R0bGV8ZW58MHx8fHwxNzcyNDEzMzM4fDA&ixlib=rb-4.1.0&q=80&w=1080",
+      "imageHint": "liquor bottle"
+    },
+    {
+      "id": "doritos-chips",
+      "description": "Bag of Doritos Nacho Cheese chips",
+      "imageUrl": "https://images.unsplash.com/photo-1585220202939-c10ec7c6dc4e?crop=entropy&cs=tinysrgb&fit=max&fm=jpg&ixid=M3w3NDE5ODJ8MHwxfHNlYXJjaHwxMHx8c25hY2slMjBiYWd8ZW58MHx8fHwxNzcyNDEzMzM4fDA&ixlib=rb-4.1.0&q=80&w=1080",
+      "imageHint": "snack bag"
+    },
+    {
+      "id": "lays-chips",
+      "description": "Bag of Lays Classic potato chips",
+      "imageUrl": "https://images.unsplash.com/photo-1694101493127-eca6dfef5011?crop=entropy&cs=tinysrgb&fit=max&fm=jpg&ixid=M3w3NDE5ODJ8MHwxfHNlYXJjaHwzfHxjaGlwJTIwYmFnfGVufDB8fHx8MTc3MjQxMzMzOHww&ixlib=rb-4.1.0&q=80&w=1080",
+      "imageHint": "chip bag"
+    },
+    {
+      "id": "coca-cola-can",
+      "description": "Can of Coca-Cola",
+      "imageUrl": "https://images.unsplash.com/photo-1716800586014-fea19e9453fb?crop=entropy&cs=tinysrgb&fit=max&fm=jpg&ixid=M3w3NDE5ODJ8MHwxfHNlYXJjaHw1fHxzb2RhJTIwY2FufGVufDB8fHx8MTc3MjM3OTMzMnww&ixlib=rb-4.1.0&q=80&w=1080",
+      "imageHint": "soda can"
+    },
+    {
+      "id": "red-bull-can",
+      "description": "Can of Red Bull energy drink",
+      "imageUrl": "https://images.unsplash.com/photo-1622543925917-763c34d1a86e?crop=entropy&cs=tinysrgb&fit=max&fm=jpg&ixid=M3w3NDE5ODJ8MHwxfHNlYXJjaHwzfHxlbmVyZ3klMjBkcmlua3xlbnwwfHx8fDE3NzI0MTMzMzh8MA&ixlib=rb-4.1.0&q=80&w=1080",
+      "imageHint": "energy drink"
+    },
+    {
+      "id": "toilet-paper",
+      "description": "Pack of toilet paper rolls",
+      "imageUrl": "https://images.unsplash.com/photo-1598046937985-11c320dfd379?crop=entropy&cs=tinysrgb&fit=max&fm=jpg&ixid=M3w3NDE5ODJ8MHwxfHNlYXJjaHw0fHx0b2lsZXQlMjBwYXBlcnxlbnwwfHx8fDE3NzIzMDIxNTR8MA&ixlib=rb-4.1.0&q=80&w=1080",
+      "imageHint": "toilet paper"
+    },
+    {
+      "id": "toothpaste",
+      "description": "Tube of toothpaste",
+      "imageUrl": "https://images.unsplash.com/photo-1590769383576-445f0e8b7d69?crop=entropy&cs=tinysrgb&fit=max&fm=jpg&ixid=M3w3NDE5ODJ8MHwxfHNlYXJjaHwxMHx8dG9vdGhwYXN0ZSUyMHR1YmV8ZW58MHx8fHwxNzcyNDEzMzM4fDA&ixlib=rb-4.1.0&q=80&w=1080",
+      "imageHint": "toothpaste tube"
+    },
+    {
+      "id": "vape-disposable",
+      "description": "A disposable vape pen",
+      "imageUrl": "https://images.unsplash.com/photo-1599177749654-b8f5fe0b016a?crop=entropy&cs=tinysrgb&fit=max&fm=jpg&ixid=M3w3NDE5ODJ8MHwxfHNlYXJjaHwyfHx2YXBlJTIwcGVufGVufDB8fHx8MTc3MjMyNzAxOHww&ixlib=rb-4.1.0&q=80&w=1080",
+      "imageHint": "vape pen"
+    },
+    {
+      "id": "cigarettes-pack",
+      "description": "A pack of cigarettes",
+      "imageUrl": "https://images.unsplash.com/photo-1615889816647-d990714eab05?crop=entropy&cs=tinysrgb&fit=max&fm=jpg&ixid=M3w3NDE5ODJ8MHwxfHNlYXJjaHwzfHxjaWdhcmV0dGUlMjBwYWNrfGVufDB8fHx8MTc3MjQxMzMzOHww&ixlib=rb-4.1.0&q=80&w=1080",
+      "imageHint": "cigarette pack"
+    },
+    {
+      "id": "lotto-ticket",
+      "description": "A lottery ticket",
+      "imageUrl": "https://images.unsplash.com/photo-1623068285726-21b0fcabe7f8?crop=entropy&cs=tinysrgb&fit=max&fm=jpg&ixid=M3w3NDE5ODJ8MHwxfHNlYXJjaHwxfHxsb3R0ZXJ5JTIwdGlja2V0fGVufDB8fHx8MTc3MjQxMzMzOXww&ixlib=rb-4.1.0&q=80&w=1080",
+      "imageHint": "lottery ticket"
+    },
+    {
+      "id": "bread",
+      "description": "A loaf of bread",
+      "imageUrl": "https://images.unsplash.com/photo-1663904460424-91895028aa9e?crop=entropy&cs=tinysrgb&fit=max&fm=jpg&ixid=M3w3NDE5ODJ8MHwxfHNlYXJjaHwzfHxicmVhZCUyMGxvYWZ8ZW58MHx8fHwxNzcyMzc1NzgxfDA&ixlib=rb-4.1.0&q=80&w=1080",
+      "imageHint": "bread loaf"
+    },
+    {
+      "id": "milk",
+      "description": "A carton of milk",
+      "imageUrl": "https://images.unsplash.com/photo-1607292819104-c54624be6bc2?crop=entropy&cs=tinysrgb&fit=max&fm=jpg&ixid=M3w3NDE5ODJ8MHwxfHNlYXJjaHw4fHxtaWxrJTIwY2FydG9ufGVufDB8fHx8MTc3MjMyODczNHww&ixlib=rb-4.1.0&q=80&w=1080",
+      "imageHint": "milk carton"
+    },
+    {
+      "id": "chocolate-bar",
+      "description": "A chocolate bar",
+      "imageUrl": "https://images.unsplash.com/photo-1626697556651-67ebdcb8cbd6?crop=entropy&cs=tinysrgb&fit=max&fm=jpg&ixid=M3w3NDE5ODJ8MHwxfHNlYXJjaHw0fHxjaG9jb2xhdGUlMjBiYXJ8ZW58MHx8fHwxNzcyNDEzMzM4fDA&ixlib=rb-4.1.0&q=80&w=1080",
+      "imageHint": "chocolate bar"
+    }
+  ]
+}
