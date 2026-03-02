@@ -1,6 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { adminAuth, adminDb } from '@/lib/firebase-admin';
-import { FieldValue } from 'firebase-admin/firestore';
+import { adminAuth } from '@/lib/firebase-admin';
 
 const ADMIN_ROLES = ['super_admin', 'admin', 'dispatcher', 'agent'];
 
@@ -13,25 +12,48 @@ export async function POST(req: NextRequest) {
       return NextResponse.json({ error: 'Token requis.' }, { status: 400 });
     }
 
-    // Vérifier le token Firebase
+    // Vérifier le token Firebase (ne dépend pas de Firestore)
     const decoded = await adminAuth.verifyIdToken(idToken);
     const uid = decoded.uid;
 
-    // Récupérer l'utilisateur Firebase Auth
+    // Récupérer le rôle depuis les custom claims (définis lors de la création du compte)
     const firebaseUser = await adminAuth.getUser(uid);
     const claims = firebaseUser.customClaims as Record<string, string> | null;
-    const claimRole = claims?.role;
+    const role = claims?.role || decoded.role as string;
 
-    // Récupérer ou créer le document app_users
-    let userDoc = await adminDb.collection('app_users').doc(uid).get();
-    let role: string;
+    // Vérifier que c'est bien un rôle admin
+    if (!role || !ADMIN_ROLES.includes(role)) {
+      return NextResponse.json({
+        error: 'Accès refusé. Ce compte n\'a pas les droits d\'administration.'
+      }, { status: 403 });
+    }
 
-    if (!userDoc.exists) {
-      // Si le compte n'existe pas dans Firestore mais a un claim admin valide → auto-créer
-      if (claimRole && ADMIN_ROLES.includes(claimRole)) {
-        role = claimRole;
-        const now = new Date().toISOString();
-        const newUserData = {
+    // Vérifier que le compte n'est pas désactivé
+    if (firebaseUser.disabled) {
+      return NextResponse.json({ error: 'Votre compte a été désactivé.' }, { status: 403 });
+    }
+
+    // Essayer de mettre à jour Firestore (best effort, ne bloque pas)
+    try {
+      const { adminDb } = await import('@/lib/firebase-admin');
+      const now = new Date().toISOString();
+      
+      // Vérifier si le doc existe
+      const userDoc = await Promise.race([
+        adminDb.collection('app_users').doc(uid).get(),
+        new Promise<null>((_, reject) => setTimeout(() => reject(new Error('timeout')), 3000))
+      ]) as FirebaseFirestore.DocumentSnapshot | null;
+
+      if (userDoc && userDoc.exists) {
+        const userData = userDoc.data()!;
+        if (userData.status === 'blocked' || userData.status === 'suspended') {
+          return NextResponse.json({ error: 'Votre compte a été suspendu ou bloqué.' }, { status: 403 });
+        }
+        // Mettre à jour last_login (fire and forget)
+        adminDb.collection('app_users').doc(uid).update({ last_login: now }).catch(() => {});
+      } else if (userDoc && !userDoc.exists) {
+        // Créer le document si absent (fire and forget)
+        adminDb.collection('app_users').doc(uid).set({
           uid,
           email: firebaseUser.email || '',
           display_name: firebaseUser.displayName || '',
@@ -40,85 +62,29 @@ export async function POST(req: NextRequest) {
           primary_role: role,
           status: 'active',
           is_email_verified: firebaseUser.emailVerified,
-          is_phone_verified: false,
           created_at: now,
           updated_at: now,
           last_login: now,
-        };
-        try {
-          await adminDb.collection('app_users').doc(uid).set(newUserData);
-          // Créer admin_profiles aussi
-          await adminDb.collection('admin_profiles').doc(uid).set({
-            uid,
-            email: firebaseUser.email || '',
-            display_name: firebaseUser.displayName || '',
-            role_key: role,
-            permissions: {
-              'orders.read': true, 'orders.write': true,
-              'drivers.read': true, 'drivers.write': true,
-              'clients.read': true, 'clients.write': true,
-              'users.read': true, 'users.write': true,
-              'dispatch.manual': true, 'dispatch.auto': true,
-              'finance.read': true, 'finance.write': true,
-              'support.read': true, 'support.write': true,
-              'settings.read': true, 'settings.write': true,
-              'promotions.read': true, 'promotions.write': true,
-            },
-            created_at: now,
-            updated_at: now,
-          });
-          userDoc = await adminDb.collection('app_users').doc(uid).get();
-        } catch {
-          // Quota Firestore dépassé — on continue quand même avec les claims
-          console.warn('Firestore quota exceeded during auto-create, using claims only');
-        }
-      } else {
-        return NextResponse.json({ error: 'Compte introuvable. Contactez l\'administrateur.' }, { status: 404 });
+        }, { merge: true }).catch(() => {});
       }
-    } else {
-      const userData = userDoc.data()!;
-      role = userData.primary_role;
-    }
-
-    // Vérifier que c'est bien un rôle admin
-    if (!ADMIN_ROLES.includes(role)) {
-      return NextResponse.json({
-        error: 'Accès refusé. Ce compte n\'a pas les droits d\'administration.'
-      }, { status: 403 });
-    }
-
-    // Vérifier le statut si le document existe
-    if (userDoc.exists) {
-      const userData = userDoc.data()!;
-      if (userData.status === 'blocked' || userData.status === 'suspended') {
-        return NextResponse.json({ error: 'Votre compte a été suspendu ou bloqué.' }, { status: 403 });
-      }
-    }
-
-    // Mettre à jour la dernière connexion (best effort)
-    try {
-      await adminDb.collection('app_users').doc(uid).update({
-        last_login: FieldValue.serverTimestamp(),
-        updated_at: FieldValue.serverTimestamp(),
-      });
     } catch {
-      // Quota — ignorer
+      // Firestore indisponible ou timeout — on continue quand même
+      console.warn('Firestore unavailable during login, continuing with claims only');
     }
 
-    // Cookie de session (uid:role)
+    // Cookie de session (uid:role) — valide 7 jours
     const sessionValue = `${uid}:${role}`;
 
-    const userData = userDoc.exists ? userDoc.data()! : {};
     const response = NextResponse.json({
       ok: true,
       uid,
       role,
-      firstName: userData.first_name || firebaseUser.displayName?.split(' ')[0] || '',
-      lastName: userData.last_name || firebaseUser.displayName?.split(' ').slice(1).join(' ') || '',
-      email: userData.email || firebaseUser.email || '',
+      email: firebaseUser.email || '',
+      displayName: firebaseUser.displayName || '',
+      firstName: firebaseUser.displayName?.split(' ')[0] || '',
+      lastName: firebaseUser.displayName?.split(' ').slice(1).join(' ') || '',
     });
 
-    // Cookie de session admin (7 jours)
     response.cookies.set('admin_session', sessionValue, {
       httpOnly: true,
       secure: process.env.NODE_ENV === 'production',
