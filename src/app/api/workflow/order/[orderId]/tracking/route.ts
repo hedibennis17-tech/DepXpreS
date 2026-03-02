@@ -4,10 +4,10 @@ import { serializeDoc } from '@/lib/firestore-serialize';
 
 export async function GET(
   req: NextRequest,
-  { params }: { params: { orderId: string } }
+  { params }: { params: Promise<{ orderId: string }> }
 ) {
   try {
-    const { orderId } = params;
+    const { orderId } = await params;
     const db = adminDb;
 
     // Récupérer la commande
@@ -15,14 +15,14 @@ export async function GET(
     if (!orderSnap.exists) {
       return NextResponse.json({ error: 'Commande introuvable' }, { status: 404 });
     }
-    const order = { id: orderSnap.id, ...serializeDoc(orderSnap) } as any;
+    const order = { id: orderSnap.id, ...serializeDoc((orderSnap as any).data?.() as Record<string, unknown> ?? {}) } as any;
 
     // Récupérer le chauffeur si assigné
     let driver = null;
     if (order.driverId) {
       const driverSnap = await db.collection('driver_profiles').doc(order.driverId).get();
       if (driverSnap.exists) {
-        const d = serializeDoc(driverSnap);
+        const d = serializeDoc((driverSnap as any).data?.() as Record<string, unknown> ?? {});
         driver = {
           id: driverSnap.id,
           firstName: d.firstName,
@@ -45,7 +45,7 @@ export async function GET(
     if (order.storeId) {
       const storeSnap = await db.collection('stores').doc(order.storeId).get();
       if (storeSnap.exists) {
-        const s = serializeDoc(storeSnap);
+        const s = serializeDoc((storeSnap as any).data?.() as Record<string, unknown> ?? {});
         store = {
           id: storeSnap.id,
           name: s.name,
@@ -63,14 +63,14 @@ export async function GET(
       .get();
 
     const statusHistory = historySnap.docs
-      .map(doc => ({ id: doc.id, ...serializeDoc(doc) }))
+      .map(doc => ({ id: doc.id, ...serializeDoc((doc as any).data?.() as Record<string, unknown> ?? {}) }))
       .sort((a: any, b: any) => new Date(a.changedAt).getTime() - new Date(b.changedAt).getTime());
 
     // Récupérer les reviews existants
     const reviewsSnap = await db.collection('reviews')
       .where('orderId', '==', orderId)
       .get();
-    const reviews = reviewsSnap.docs.map(doc => ({ id: doc.id, ...serializeDoc(doc) }));
+    const reviews = reviewsSnap.docs.map(doc => ({ id: doc.id, ...serializeDoc((doc as any).data?.() as Record<string, unknown> ?? {}) }));
 
     // Calculer l'ETA estimé
     const etaMinutes = calculateETA(order.status, order);

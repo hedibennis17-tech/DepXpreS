@@ -174,7 +174,7 @@ export async function updateDriverStatus(
     updateData.suspendedAt = serverTimestamp();
     updateData.suspendedReason = reason || "";
   }
-  await updateDoc(ref, updateData);
+  await updateDoc(ref, updateData as any);
 }
 
 export async function verifyDriverDocument(
@@ -193,7 +193,7 @@ export async function verifyDriverDocument(
   if (rejectionReason) {
     updateData.rejectionReason = rejectionReason;
   }
-  await updateDoc(ref, updateData);
+  await updateDoc(ref, updateData as any);
 }
 
 export async function fetchAllDriverDocuments(): Promise<(DriverDocument & { driverName: string })[]> {

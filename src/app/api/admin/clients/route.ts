@@ -2,18 +2,6 @@ import { NextRequest, NextResponse } from "next/server";
 import { adminDb } from "@/lib/firebase-admin";
 import { serializeDoc, serializeDocs } from '@/lib/firestore-serialize';
 
-function serializeDoc(data: FirebaseFirestore.DocumentData) {
-  const result: Record<string, unknown> = {};
-  for (const [key, value] of Object.entries(data)) {
-    if (value && typeof value === "object" && "toDate" in value) {
-      result[key] = value.toDate().toISOString();
-    } else {
-      result[key] = value;
-    }
-  }
-  return result;
-}
-
 export async function GET(req: NextRequest) {
   try {
     const { searchParams } = new URL(req.url);

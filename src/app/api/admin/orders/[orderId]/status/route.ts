@@ -62,7 +62,7 @@ export async function POST(
 
     const batch = adminDb.batch();
 
-    batch.update(adminDb.collection("orders").doc(orderId), updateData);
+    batch.update(adminDb.collection("orders").doc(orderId), updateData as any);
 
     const histRef = adminDb
       .collection("orders")

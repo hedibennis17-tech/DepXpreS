@@ -227,7 +227,7 @@ export default function OrderDetailPage({ params }: { params: Promise<{ orderId:
                 <StatusIcon className="h-3 w-3" />
                 {statusCfg.label}
               </Badge>
-              {order.restrictedItemsPresent && (
+              {Boolean(order.restrictedItemsPresent) && (
                 <Badge variant="outline" className="border-orange-300 text-orange-600">Articles 18+</Badge>
               )}
             </div>

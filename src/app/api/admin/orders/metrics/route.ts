@@ -1,6 +1,16 @@
 import { NextRequest, NextResponse } from "next/server";
 import { adminDb } from "@/lib/firebase-admin";
-import { serializeDoc, serializeDocs } from '@/lib/firestore-serialize';
+
+type OrderData = {
+  createdAt: string | null;
+  status?: string;
+  total?: number;
+  deliveryFee?: number;
+  tipAmount?: number;
+  estimatedPrepMinutes?: number;
+  estimatedDriveMinutes?: number;
+  [key: string]: unknown;
+};
 
 export async function GET(req: NextRequest) {
   try {
@@ -16,12 +26,18 @@ export async function GET(req: NextRequest) {
     if (storeId) query = query.where("storeId", "==", storeId);
 
     const snapshot = await query.get();
-    let orders = snapshot.docs.map((doc) => {
+    let orders: OrderData[] = snapshot.docs.map((doc) => {
       const d = doc.data();
       return {
         ...d,
         createdAt: d.createdAt?.toDate?.()?.toISOString() || null,
-      };
+        status: d.status as string | undefined,
+        total: typeof d.total === 'number' ? d.total : 0,
+        deliveryFee: typeof d.deliveryFee === 'number' ? d.deliveryFee : 0,
+        tipAmount: typeof d.tipAmount === 'number' ? d.tipAmount : 0,
+        estimatedPrepMinutes: typeof d.estimatedPrepMinutes === 'number' ? d.estimatedPrepMinutes : 0,
+        estimatedDriveMinutes: typeof d.estimatedDriveMinutes === 'number' ? d.estimatedDriveMinutes : 0,
+      } as OrderData;
     });
 
     // Date filters
@@ -43,11 +59,11 @@ export async function GET(req: NextRequest) {
     const CANCELLED_STATUSES = ["cancelled", "refunded", "disputed"];
 
     const totalOrders = orders.length;
-    const pendingOrders = orders.filter((o) => PENDING_STATUSES.includes(o.status)).length;
-    const preparingOrders = orders.filter((o) => PREPARING_STATUSES.includes(o.status)).length;
-    const deliveringOrders = orders.filter((o) => DELIVERING_STATUSES.includes(o.status)).length;
-    const completedOrders = orders.filter((o) => COMPLETED_STATUSES.includes(o.status)).length;
-    const cancelledOrders = orders.filter((o) => CANCELLED_STATUSES.includes(o.status)).length;
+    const pendingOrders = orders.filter((o) => PENDING_STATUSES.includes(o.status || '')).length;
+    const preparingOrders = orders.filter((o) => PREPARING_STATUSES.includes(o.status || '')).length;
+    const deliveringOrders = orders.filter((o) => DELIVERING_STATUSES.includes(o.status || '')).length;
+    const completedOrders = orders.filter((o) => COMPLETED_STATUSES.includes(o.status || '')).length;
+    const cancelledOrders = orders.filter((o) => CANCELLED_STATUSES.includes(o.status || '')).length;
 
     const grossTotal = orders.reduce((sum, o) => sum + (o.total || 0), 0);
     const totalDeliveryFees = orders.reduce((sum, o) => sum + (o.deliveryFee || 0), 0);

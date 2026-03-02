@@ -5,10 +5,10 @@ import { serializeDoc } from '@/lib/firestore-serialize';
 // POST — Mettre à jour la position GPS du chauffeur
 export async function POST(
   req: NextRequest,
-  { params }: { params: { driverId: string } }
+  { params }: { params: Promise<{ driverId: string }> }
 ) {
   try {
-    const { driverId } = params;
+    const { driverId } = await params;
     const body = await req.json();
     const { lat, lng, heading, speed, orderId } = body;
 
@@ -58,10 +58,10 @@ export async function POST(
 // GET — Récupérer la position actuelle du chauffeur
 export async function GET(
   req: NextRequest,
-  { params }: { params: { driverId: string } }
+  { params }: { params: Promise<{ driverId: string }> }
 ) {
   try {
-    const { driverId } = params;
+    const { driverId } = await params;
     const db = adminDb;
 
     const driverSnap = await db.collection('driver_profiles').doc(driverId).get();
@@ -69,7 +69,7 @@ export async function GET(
       return NextResponse.json({ error: 'Chauffeur introuvable' }, { status: 404 });
     }
 
-    const driver = serializeDoc(driverSnap);
+    const driver = serializeDoc((driverSnap as any).data?.() as Record<string, unknown> ?? {});
     return NextResponse.json({
       driverId,
       location: driver.lastLocation || null,

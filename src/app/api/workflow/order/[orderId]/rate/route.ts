@@ -4,10 +4,10 @@ import { serializeDoc } from '@/lib/firestore-serialize';
 
 export async function POST(
   req: NextRequest,
-  { params }: { params: { orderId: string } }
+  { params }: { params: Promise<{ orderId: string }> }
 ) {
   try {
-    const { orderId } = params;
+    const { orderId } = await params;
     const body = await req.json();
     const { raterType, rateeType, rating, comment, tags } = body;
     // raterType: 'client' | 'driver'
@@ -108,10 +108,10 @@ export async function POST(
 
 export async function GET(
   req: NextRequest,
-  { params }: { params: { orderId: string } }
+  { params }: { params: Promise<{ orderId: string }> }
 ) {
   try {
-    const { orderId } = params;
+    const { orderId } = await params;
     const db = adminDb;
 
     const reviewsSnap = await db.collection('reviews')
@@ -120,7 +120,7 @@ export async function GET(
 
     const reviews = reviewsSnap.docs.map(doc => ({
       id: doc.id,
-      ...serializeDoc(doc),
+      ...serializeDoc((doc as any).data?.() as Record<string, unknown> ?? {}),
     }));
 
     return NextResponse.json({ reviews });

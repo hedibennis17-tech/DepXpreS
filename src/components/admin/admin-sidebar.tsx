@@ -264,7 +264,7 @@ const SidebarCollapsibleItem = ({
         <CollapsibleTrigger asChild>
           <SidebarMenuButton
             asChild
-            variant="ghost"
+            variant="default"
             className="w-full justify-start"
             isActive={isParentActive && !item.subItems.some(sub => sub.href === pathname && sub.href !== primaryActionHref)}
           >
@@ -279,7 +279,7 @@ const SidebarCollapsibleItem = ({
           <SidebarMenuSub>
             {item.subItems.map((subItem) => (
               <SidebarMenuSubItem key={subItem.href}>
-                <Link href={subItem.href} asChild>
+                <Link href={subItem.href}>
                   <SidebarMenuSubButton
                     isActive={pathname === subItem.href}
                     className="w-full justify-start"
@@ -314,7 +314,7 @@ export function AdminSidebar() {
           <SidebarMenuItem>
             <SidebarMenuButton
               asChild
-              variant="ghost"
+              variant="default"
               className="w-full justify-start"
               isActive={pathname === "/admin/search"}
             >
@@ -339,7 +339,7 @@ export function AdminSidebar() {
             <p className="text-sm font-semibold text-sidebar-foreground">Hedi Bennis</p>
             <p className="text-xs text-sidebar-foreground/70">Super Admin</p>
           </div>
-          <Button variant="ghost" size="icon" className="group-data-[collapsible=icon]:hidden">
+          <Button variant="default" size="icon" className="group-data-[collapsible=icon]:hidden">
             <LogOut className="h-4 w-4" />
           </Button>
         </div>

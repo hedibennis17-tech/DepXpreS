@@ -36,10 +36,10 @@ const STATUS_LABELS: Record<string, string> = {
 
 export async function POST(
   req: NextRequest,
-  { params }: { params: { orderId: string } }
+  { params }: { params: Promise<{ orderId: string }> }
 ) {
   try {
-    const { orderId } = params;
+    const { orderId } = await params;
     const body = await req.json();
     const { newStatus, driverId, note, location } = body;
 
@@ -174,7 +174,7 @@ export async function POST(
 
     // Récupérer la commande mise à jour
     const updatedSnap = await orderRef.get();
-    const updatedOrder = serializeDoc(updatedSnap);
+    const updatedOrder = serializeDoc((updatedSnap as any).data?.() as Record<string, unknown> ?? {});
 
     return NextResponse.json({
       success: true,
@@ -206,10 +206,10 @@ function getNotificationBody(status: string, order: any): string {
 
 export async function GET(
   req: NextRequest,
-  { params }: { params: { orderId: string } }
+  { params }: { params: Promise<{ orderId: string }> }
 ) {
   try {
-    const { orderId } = params;
+    const { orderId } = await params;
     const db = adminDb;
 
     const historySnap = await db.collection('orders')
@@ -218,7 +218,7 @@ export async function GET(
       .get();
 
     const history = historySnap.docs
-      .map(doc => ({ id: doc.id, ...serializeDoc(doc) }))
+      .map(doc => ({ id: doc.id, ...serializeDoc((doc as any).data?.() as Record<string, unknown> ?? {}) }))
       .sort((a: any, b: any) => new Date(a.changedAt).getTime() - new Date(b.changedAt).getTime());
 
     return NextResponse.json({ history });
