@@ -3,10 +3,12 @@ import { adminDb } from '@/lib/firebase-admin';
 
 export async function GET() {
   try {
-    const doc = await adminDb.collection('system_settings').doc('global').get();
-    if (!doc.exists) return NextResponse.json({ error: 'Not found' }, { status: 404 });
-    return NextResponse.json({ settings: { id: doc.id, ...doc.data() } });
+    const snap = await adminDb.collection('system_settings').get();
+    const settings: Record<string, any> = {};
+    snap.docs.forEach(d => { settings[d.id] = { id: d.id, ...d.data() }; });
+    return NextResponse.json({ settings, total: snap.size });
   } catch (e) {
+    console.error('settings API error:', e);
     return NextResponse.json({ error: String(e) }, { status: 500 });
   }
 }
@@ -14,11 +16,12 @@ export async function GET() {
 export async function PATCH(req: NextRequest) {
   try {
     const body = await req.json();
-    await adminDb.collection('system_settings').doc('global').update({
-      ...body,
-      updatedAt: new Date(),
-      updatedBy: 'admin-hedi',
-    });
+    const { section, ...data } = body;
+    const docId = section || 'general';
+    await adminDb.collection('system_settings').doc(docId).set(
+      { ...data, updatedAt: new Date(), updatedBy: 'admin' },
+      { merge: true }
+    );
     return NextResponse.json({ success: true });
   } catch (e) {
     return NextResponse.json({ error: String(e) }, { status: 500 });

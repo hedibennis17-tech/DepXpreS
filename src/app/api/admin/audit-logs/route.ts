@@ -4,17 +4,23 @@ import { adminDb } from '@/lib/firebase-admin';
 export async function GET(req: NextRequest) {
   try {
     const { searchParams } = new URL(req.url);
-    const resourceType = searchParams.get('resourceType');
+    const entityType = searchParams.get('entityType') || searchParams.get('resourceType');
     const limit = parseInt(searchParams.get('limit') || '50');
     
-    let query: FirebaseFirestore.Query = adminDb.collection('audit_logs');
-    if (resourceType) query = query.where('resourceType', '==', resourceType);
-    query = query.orderBy('createdAt', 'desc').limit(limit);
+    const snap = await adminDb.collection('audit_logs').get();
+    let logs = snap.docs.map(d => ({ id: d.id, ...d.data() })) as any[];
     
-    const snap = await query.get();
-    const logs = snap.docs.map(d => ({ id: d.id, ...d.data() }));
-    return NextResponse.json({ logs, total: logs.length });
+    if (entityType) logs = logs.filter(l => l.entityType === entityType || l.resourceType === entityType);
+    
+    logs.sort((a, b) => {
+      const da = a.createdAt?.toDate?.() || new Date(a.createdAt || 0);
+      const db2 = b.createdAt?.toDate?.() || new Date(b.createdAt || 0);
+      return db2.getTime() - da.getTime();
+    });
+    
+    return NextResponse.json({ logs: logs.slice(0, limit), total: logs.length });
   } catch (e) {
+    console.error('audit-logs API error:', e);
     return NextResponse.json({ error: String(e) }, { status: 500 });
   }
 }

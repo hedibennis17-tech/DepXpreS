@@ -4,50 +4,44 @@ import { adminDb } from '@/lib/firebase-admin';
 export async function GET(req: NextRequest) {
   try {
     const { searchParams } = new URL(req.url);
-    const type = searchParams.get('type'); // 'payment' | 'payout' | 'refund'
+    const type = searchParams.get('type');
     const status = searchParams.get('status');
     const limit = parseInt(searchParams.get('limit') || '50');
     
-    // Récupérer payments
-    let paymentsQuery: FirebaseFirestore.Query = adminDb.collection('payments');
-    if (status) paymentsQuery = paymentsQuery.where('paymentStatus', '==', status);
-    paymentsQuery = paymentsQuery.orderBy('createdAt', 'desc').limit(limit);
+    const snap = await adminDb.collection('transactions').get();
+    let txs = snap.docs.map(d => ({ id: d.id, ...d.data() })) as any[];
     
-    // Récupérer payouts
-    let payoutsQuery: FirebaseFirestore.Query = adminDb.collection('payouts');
-    payoutsQuery = payoutsQuery.orderBy('createdAt', 'desc').limit(limit);
+    if (type) txs = txs.filter(t => t.type === type);
+    if (status) txs = txs.filter(t => t.status === status);
     
-    const [paymentsSnap, payoutsSnap] = await Promise.all([
-      type !== 'payout' ? paymentsQuery.get() : Promise.resolve({ docs: [] } as any),
-      type !== 'payment' ? payoutsQuery.get() : Promise.resolve({ docs: [] } as any),
-    ]);
-    
-    const payments = paymentsSnap.docs.map((d: any) => ({ id: d.id, ...d.data(), transactionType: 'payment' }));
-    const payouts = payoutsSnap.docs.map((d: any) => ({ id: d.id, ...d.data(), transactionType: 'payout' }));
-    
-    const transactions = [...payments, ...payouts].sort((a: any, b: any) => {
-      const aDate = a.createdAt?.toDate?.() || new Date(a.createdAt);
-      const bDate = b.createdAt?.toDate?.() || new Date(b.createdAt);
-      return bDate.getTime() - aDate.getTime();
+    // Trier par date décroissante
+    txs.sort((a, b) => {
+      const da = a.createdAt?.toDate?.() || new Date(a.createdAt || 0);
+      const db2 = b.createdAt?.toDate?.() || new Date(b.createdAt || 0);
+      return db2.getTime() - da.getTime();
     });
     
-    // Métriques financières
-    const totalRevenue = payments.reduce((sum: number, p: any) => sum + (p.amount || 0), 0);
-    const totalRefunds = payments.filter((p: any) => p.paymentStatus === 'refunded').reduce((sum: number, p: any) => sum + (p.refundAmount || 0), 0);
-    const totalPayouts = payouts.reduce((sum: number, p: any) => sum + (p.amount || 0), 0);
+    const allTxs = snap.docs.map(d => d.data()) as any[];
+    const totalRevenue = allTxs.filter(t => t.type === 'payment' && t.status === 'paid').reduce((s, t) => s + (t.amount || 0), 0);
+    const totalRefunds = allTxs.filter(t => t.status === 'refunded').reduce((s, t) => s + (t.amount || 0), 0);
+    const totalPayouts = allTxs.filter(t => t.type === 'payout').reduce((s, t) => s + (t.amount || 0), 0);
+    const netRevenue = totalRevenue - totalRefunds - totalPayouts;
     
-    const metrics = {
-      totalRevenue: Math.round(totalRevenue * 100) / 100,
-      totalRefunds: Math.round(totalRefunds * 100) / 100,
-      totalPayouts: Math.round(totalPayouts * 100) / 100,
-      netRevenue: Math.round((totalRevenue - totalRefunds - totalPayouts) * 100) / 100,
-      paymentsCount: payments.length,
-      payoutsCount: payouts.length,
-      refundsCount: payments.filter((p: any) => p.paymentStatus === 'refunded').length,
-    };
-    
-    return NextResponse.json({ transactions, metrics, total: transactions.length });
+    return NextResponse.json({
+      transactions: txs.slice(0, limit),
+      total: snap.size,
+      metrics: {
+        totalRevenue: Math.round(totalRevenue * 100) / 100,
+        totalRefunds: Math.round(totalRefunds * 100) / 100,
+        totalPayouts: Math.round(totalPayouts * 100) / 100,
+        netRevenue: Math.round(netRevenue * 100) / 100,
+        paymentsCount: allTxs.filter(t => t.type === 'payment').length,
+        payoutsCount: allTxs.filter(t => t.type === 'payout').length,
+        refundsCount: allTxs.filter(t => t.status === 'refunded').length,
+      }
+    });
   } catch (e) {
+    console.error('transactions API error:', e);
     return NextResponse.json({ error: String(e) }, { status: 500 });
   }
 }

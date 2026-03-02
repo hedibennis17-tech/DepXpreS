@@ -4,30 +4,40 @@ import { adminDb } from '@/lib/firebase-admin';
 export async function GET(req: NextRequest) {
   try {
     const { searchParams } = new URL(req.url);
-    const recipientType = searchParams.get('recipientType');
+    const recipientRole = searchParams.get('recipientRole') || searchParams.get('recipientType');
     const status = searchParams.get('status');
     const limit = parseInt(searchParams.get('limit') || '50');
     
-    let query: FirebaseFirestore.Query = adminDb.collection('notifications');
-    if (recipientType) query = query.where('recipientType', '==', recipientType);
-    if (status) query = query.where('status', '==', status);
-    query = query.orderBy('createdAt', 'desc').limit(limit);
+    const snap = await adminDb.collection('notifications').get();
+    let notifications = snap.docs.map(d => {
+      const data = d.data();
+      return {
+        id: d.id,
+        ...data,
+        createdAt: data.createdAt?.toDate?.()?.toISOString() || (data.createdAt?._seconds ? new Date(data.createdAt._seconds * 1000).toISOString() : null),
+      };
+    }) as any[];
     
-    const snap = await query.get();
-    const notifications = snap.docs.map(d => ({ id: d.id, ...d.data() }));
+    if (recipientRole) notifications = notifications.filter(n => n.recipientRole === recipientRole || n.recipientType === recipientRole);
+    if (status) notifications = notifications.filter(n => n.status === status);
     
-    // Stats
-    const allSnap = await adminDb.collection('notifications').get();
-    const all = allSnap.docs.map(d => d.data());
+    notifications.sort((a, b) => {
+      const da = a.createdAt ? new Date(a.createdAt).getTime() : 0;
+      const db2 = b.createdAt ? new Date(b.createdAt).getTime() : 0;
+      return db2 - da;
+    });
+    
+    const all = snap.docs.map(d => d.data()) as any[];
     const stats = {
       total: all.length,
-      unread: all.filter(n => !n.read).length,
-      delivered: all.filter(n => n.status === 'delivered').length,
+      unread: all.filter(n => !n.isRead && !n.read).length,
+      delivered: all.filter(n => n.status === 'delivered' || n.status === 'sent').length,
       failed: all.filter(n => n.status === 'failed').length,
     };
     
-    return NextResponse.json({ notifications, stats, total: notifications.length });
+    return NextResponse.json({ notifications: notifications.slice(0, limit), stats, total: notifications.length });
   } catch (e) {
+    console.error('notifications API error:', e);
     return NextResponse.json({ error: String(e) }, { status: 500 });
   }
 }
@@ -38,14 +48,13 @@ export async function POST(req: NextRequest) {
     const ref = adminDb.collection('notifications').doc();
     const data = {
       ...body,
-      id: ref.id,
       status: 'sent',
-      read: false,
+      isRead: false,
       createdAt: new Date(),
       deliveredAt: new Date(),
     };
     await ref.set(data);
-    return NextResponse.json({ notification: data });
+    return NextResponse.json({ notification: { id: ref.id, ...data } });
   } catch (e) {
     return NextResponse.json({ error: String(e) }, { status: 500 });
   }

@@ -8,18 +8,29 @@ export async function GET(req: NextRequest) {
     const category = searchParams.get('category');
     const priority = searchParams.get('priority');
     
-    let query: FirebaseFirestore.Query = adminDb.collection('support_tickets');
-    if (status) query = query.where('status', '==', status);
-    if (category) query = query.where('category', '==', category);
-    if (priority) query = query.where('priority', '==', priority);
-    query = query.orderBy('createdAt', 'desc');
+    const snap = await adminDb.collection('support_tickets').get();
+    let tickets = snap.docs.map(d => {
+      const data = d.data();
+      return {
+        id: d.id,
+        ...data,
+        createdAt: data.createdAt?.toDate?.()?.toISOString() || (data.createdAt?._seconds ? new Date(data.createdAt._seconds * 1000).toISOString() : null),
+        updatedAt: data.updatedAt?.toDate?.()?.toISOString() || null,
+        slaDueAt: data.slaDueAt?.toDate?.()?.toISOString() || (data.slaDueAt?._seconds ? new Date(data.slaDueAt._seconds * 1000).toISOString() : null),
+      };
+    }) as any[];
     
-    const snap = await query.get();
-    const tickets = snap.docs.map(d => ({ id: d.id, ...d.data() }));
+    if (status) tickets = tickets.filter(t => t.status === status);
+    if (category) tickets = tickets.filter(t => t.category === category);
+    if (priority) tickets = tickets.filter(t => t.priority === priority);
     
-    // Métriques
-    const allSnap = await adminDb.collection('support_tickets').get();
-    const all = allSnap.docs.map(d => d.data());
+    tickets.sort((a, b) => {
+      const da = a.createdAt ? new Date(a.createdAt).getTime() : 0;
+      const db2 = b.createdAt ? new Date(b.createdAt).getTime() : 0;
+      return db2 - da;
+    });
+    
+    const all = snap.docs.map(d => d.data()) as any[];
     const metrics = {
       total: all.length,
       open: all.filter(t => t.status === 'open').length,
@@ -30,6 +41,18 @@ export async function GET(req: NextRequest) {
     };
     
     return NextResponse.json({ tickets, metrics, total: tickets.length });
+  } catch (e) {
+    console.error('support API error:', e);
+    return NextResponse.json({ error: String(e) }, { status: 500 });
+  }
+}
+
+export async function POST(req: NextRequest) {
+  try {
+    const body = await req.json();
+    const ref = adminDb.collection('support_tickets').doc();
+    await ref.set({ ...body, status: 'open', createdAt: new Date(), updatedAt: new Date() });
+    return NextResponse.json({ id: ref.id, success: true });
   } catch (e) {
     return NextResponse.json({ error: String(e) }, { status: 500 });
   }

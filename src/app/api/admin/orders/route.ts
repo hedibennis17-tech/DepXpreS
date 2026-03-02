@@ -1,6 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
 import { adminDb } from "@/lib/firebase-admin";
-import { FieldValue } from "firebase-admin/firestore";
 
 export async function GET(req: NextRequest) {
   try {
@@ -16,71 +15,51 @@ export async function GET(req: NextRequest) {
     const page = parseInt(searchParams.get("page") || "1");
     const pageSize = parseInt(searchParams.get("pageSize") || "25");
 
-    let query: FirebaseFirestore.Query = adminDb.collection("orders");
-
-    // Apply filters
-    if (orderStatus) {
-      const statuses = orderStatus.split(",");
-      if (statuses.length === 1) {
-        query = query.where("status", "==", statuses[0]);
-      }
-    }
-    if (paymentStatus) {
-      query = query.where("paymentStatus", "==", paymentStatus);
-    }
-    if (storeId) {
-      query = query.where("storeId", "==", storeId);
-    }
-    if (driverId) {
-      query = query.where("driverId", "==", driverId);
-    }
-    if (zoneId) {
-      query = query.where("zoneId", "==", zoneId);
-    }
-
-    query = query.orderBy("createdAt", "desc");
-
-    const snapshot = await query.get();
+    // Récupérer toutes les commandes sans orderBy pour éviter les index composites
+    const snapshot = await adminDb.collection("orders").get();
+    
     let rows = snapshot.docs.map((doc) => {
       const data = doc.data();
       return {
         id: doc.id,
         ...data,
-        createdAt: data.createdAt?.toDate?.()?.toISOString() || null,
+        createdAt: data.createdAt?.toDate?.()?.toISOString() || (data.createdAt?._seconds ? new Date(data.createdAt._seconds * 1000).toISOString() : null),
         updatedAt: data.updatedAt?.toDate?.()?.toISOString() || null,
         estimatedDeliveryAt: data.estimatedDeliveryAt?.toDate?.()?.toISOString() || null,
         deliveredAt: data.deliveredAt?.toDate?.()?.toISOString() || null,
         completedAt: data.completedAt?.toDate?.()?.toISOString() || null,
         cancelledAt: data.cancelledAt?.toDate?.()?.toISOString() || null,
       };
-    });
+    }) as any[];
 
-    // Client-side search filter
+    // Filtres côté serveur (après récupération)
+    if (orderStatus) {
+      const statuses = orderStatus.split(",");
+      rows = rows.filter(r => statuses.includes(r.status));
+    }
+    if (paymentStatus) rows = rows.filter(r => r.paymentStatus === paymentStatus);
+    if (storeId) rows = rows.filter(r => r.storeId === storeId);
+    if (driverId) rows = rows.filter(r => r.driverId === driverId);
+    if (zoneId) rows = rows.filter(r => r.zoneId === zoneId);
     if (search) {
       const s = search.toLowerCase();
-      rows = rows.filter(
-        (r) =>
-          r.id?.toLowerCase().includes(s) ||
-          r.orderNumber?.toLowerCase().includes(s) ||
-          r.clientName?.toLowerCase().includes(s) ||
-          r.driverName?.toLowerCase().includes(s) ||
-          r.storeName?.toLowerCase().includes(s)
+      rows = rows.filter(r =>
+        r.id?.toLowerCase().includes(s) ||
+        r.orderNumber?.toLowerCase().includes(s) ||
+        r.clientName?.toLowerCase().includes(s) ||
+        r.driverName?.toLowerCase().includes(s) ||
+        r.storeName?.toLowerCase().includes(s)
       );
     }
+    if (dateFrom) rows = rows.filter(r => r.createdAt && r.createdAt >= dateFrom);
+    if (dateTo) rows = rows.filter(r => r.createdAt && r.createdAt <= dateTo);
 
-    // Multiple status filter
-    if (orderStatus && orderStatus.includes(",")) {
-      const statuses = orderStatus.split(",");
-      rows = rows.filter((r) => statuses.includes(r.status));
-    }
-
-    // Date filters
-    if (dateFrom) {
-      rows = rows.filter((r) => r.createdAt && r.createdAt >= dateFrom);
-    }
-    if (dateTo) {
-      rows = rows.filter((r) => r.createdAt && r.createdAt <= dateTo);
-    }
+    // Trier par date décroissante
+    rows.sort((a, b) => {
+      const da = a.createdAt ? new Date(a.createdAt).getTime() : 0;
+      const db2 = b.createdAt ? new Date(b.createdAt).getTime() : 0;
+      return db2 - da;
+    });
 
     const total = rows.length;
     const offset = (page - 1) * pageSize;
@@ -95,9 +74,6 @@ export async function GET(req: NextRequest) {
     });
   } catch (error) {
     console.error("GET /api/admin/orders error:", error);
-    return NextResponse.json(
-      { error: "Failed to fetch orders" },
-      { status: 500 }
-    );
+    return NextResponse.json({ error: "Failed to fetch orders" }, { status: 500 });
   }
 }
