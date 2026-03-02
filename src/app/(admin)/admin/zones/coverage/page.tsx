@@ -3,7 +3,7 @@
 import { useState, useEffect } from 'react';
 import dynamic from 'next/dynamic';
 
-const GoogleMapView = dynamic(() => import('@/components/maps/GoogleMapView'), {
+const LeafletMap = dynamic(() => import('@/components/maps/LeafletMap'), {
   ssr: false,
   loading: () => (
     <div className="flex items-center justify-center h-96 bg-gray-100 rounded-lg">
@@ -73,8 +73,8 @@ export default function ZonesCoveragePage() {
             <div className="animate-spin rounded-full h-10 w-10 border-b-2 border-orange-500" />
           </div>
         ) : (
-          <GoogleMapView
-            center={{ lat: 45.5400, lng: -73.6500 }}
+          <LeafletMap
+            center={[45.5400, -73.6500]}
             zoom={11}
             markers={mapMarkers}
             height="500px"

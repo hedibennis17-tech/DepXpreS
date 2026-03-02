@@ -3,7 +3,7 @@
 import { useState, useEffect } from "react";
 import dynamic from 'next/dynamic';
 
-const GoogleMapView = dynamic(() => import('@/components/maps/GoogleMapView'), {
+const LeafletMap = dynamic(() => import('@/components/maps/LeafletMap'), {
   ssr: false,
   loading: () => (
     <div className="flex items-center justify-center h-48 bg-gray-100 rounded-lg">
@@ -102,8 +102,8 @@ export default function OrderTrackingPage() {
           </CardTitle>
         </CardHeader>
         <CardContent className="p-0">
-          <GoogleMapView
-            center={{ lat: 45.5631, lng: -73.7124 }}
+          <LeafletMap
+            center={[45.5631, -73.7124]}
             zoom={14}
             markers={[
               { id: 'driver', lat: 45.5631, lng: -73.7124, type: 'driver', label: 'Votre chauffeur', status: 'En route', info: 'Arrivée dans ~12 min' },

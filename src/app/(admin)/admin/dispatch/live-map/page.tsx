@@ -3,13 +3,13 @@
 import { useState, useEffect } from 'react';
 import dynamic from 'next/dynamic';
 
-const GoogleMapView = dynamic(() => import('@/components/maps/GoogleMapView'), {
+const LeafletMap = dynamic(() => import('@/components/maps/LeafletMap'), {
   ssr: false,
   loading: () => (
     <div className="flex items-center justify-center h-96 bg-gray-100 rounded-lg">
       <div className="text-center">
         <div className="animate-spin rounded-full h-10 w-10 border-b-2 border-orange-500 mx-auto mb-3" />
-        <p className="text-gray-500 text-sm">Chargement de la carte Google Maps...</p>
+        <p className="text-gray-500 text-sm">Chargement de la carte...</p>
       </div>
     </div>
   ),
@@ -186,11 +186,12 @@ export default function DispatchLiveMapPage() {
             </div>
           </div>
         ) : (
-          <GoogleMapView
-            center={mapCenter}
+          <LeafletMap
+            center={[mapCenter.lat, mapCenter.lng]}
             zoom={selectedZone === 'all' ? 11 : 13}
             markers={mapMarkers}
             height="550px"
+            showZoneCircles={selectedZone === 'all'}
           />
         )}
       </div>
