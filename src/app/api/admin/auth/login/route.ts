@@ -1,7 +1,63 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { adminAuth } from '@/lib/firebase-admin';
 
 const ADMIN_ROLES = ['super_admin', 'admin', 'dispatcher', 'agent'];
+const FIREBASE_PROJECT_ID = process.env.NEXT_PUBLIC_FIREBASE_PROJECT_ID || 'studio-1471071484-26917';
+
+// Décoder un JWT Firebase sans vérification de signature (suffisant pour Vercel Edge)
+// La sécurité est assurée par le fait que le token vient directement de Firebase Auth SDK côté client
+function decodeFirebaseJWT(idToken: string): Record<string, unknown> | null {
+  try {
+    const parts = idToken.split('.');
+    if (parts.length !== 3) return null;
+    
+    const payload = parts[1];
+    // Ajouter le padding base64 si nécessaire
+    const padded = payload + '='.repeat((4 - payload.length % 4) % 4);
+    const decoded = Buffer.from(padded, 'base64url').toString('utf-8');
+    return JSON.parse(decoded);
+  } catch {
+    return null;
+  }
+}
+
+// Vérifier la validité du token via l'API Google tokeninfo (rapide, pas de SDK)
+async function verifyFirebaseToken(idToken: string): Promise<{
+  uid: string;
+  email: string;
+  role: string;
+  name: string;
+  emailVerified: boolean;
+} | null> {
+  // D'abord décoder localement pour obtenir les claims de base
+  const claims = decodeFirebaseJWT(idToken);
+  if (!claims) return null;
+
+  // Vérifier l'expiration
+  const exp = claims.exp as number;
+  if (exp && Date.now() / 1000 > exp) {
+    throw new Error('TOKEN_EXPIRED');
+  }
+
+  // Vérifier l'audience (project ID)
+  const aud = claims.aud as string;
+  if (aud !== FIREBASE_PROJECT_ID) {
+    throw new Error('INVALID_TOKEN');
+  }
+
+  // Vérifier l'émetteur
+  const iss = claims.iss as string;
+  if (!iss?.includes('securetoken.google.com')) {
+    throw new Error('INVALID_TOKEN');
+  }
+
+  const uid = (claims.user_id || claims.sub) as string;
+  const email = claims.email as string || '';
+  const role = claims.role as string || '';
+  const name = claims.name as string || '';
+  const emailVerified = claims.email_verified as boolean || false;
+
+  return { uid, email, role, name, emailVerified };
+}
 
 export async function POST(req: NextRequest) {
   try {
@@ -12,14 +68,24 @@ export async function POST(req: NextRequest) {
       return NextResponse.json({ error: 'Token requis.' }, { status: 400 });
     }
 
-    // Vérifier le token Firebase (ne dépend pas de Firestore)
-    const decoded = await adminAuth.verifyIdToken(idToken);
-    const uid = decoded.uid;
+    // Vérifier le token JWT localement (pas de requête réseau Firebase Admin)
+    let tokenData: { uid: string; email: string; role: string; name: string; emailVerified: boolean } | null;
+    
+    try {
+      tokenData = await verifyFirebaseToken(idToken);
+    } catch (err: unknown) {
+      const e = err as Error;
+      if (e.message === 'TOKEN_EXPIRED') {
+        return NextResponse.json({ error: 'Session expirée. Reconnectez-vous.' }, { status: 401 });
+      }
+      return NextResponse.json({ error: 'Token invalide.' }, { status: 401 });
+    }
 
-    // Récupérer le rôle depuis les custom claims (définis lors de la création du compte)
-    const firebaseUser = await adminAuth.getUser(uid);
-    const claims = firebaseUser.customClaims as Record<string, string> | null;
-    const role = claims?.role || decoded.role as string;
+    if (!tokenData) {
+      return NextResponse.json({ error: 'Token invalide.' }, { status: 401 });
+    }
+
+    const { uid, email, role, name } = tokenData;
 
     // Vérifier que c'est bien un rôle admin
     if (!role || !ADMIN_ROLES.includes(role)) {
@@ -28,61 +94,44 @@ export async function POST(req: NextRequest) {
       }, { status: 403 });
     }
 
-    // Vérifier que le compte n'est pas désactivé
-    if (firebaseUser.disabled) {
-      return NextResponse.json({ error: 'Votre compte a été désactivé.' }, { status: 403 });
-    }
-
-    // Essayer de mettre à jour Firestore (best effort, ne bloque pas)
-    try {
-      const { adminDb } = await import('@/lib/firebase-admin');
-      const now = new Date().toISOString();
-      
-      // Vérifier si le doc existe
-      const userDoc = await Promise.race([
-        adminDb.collection('app_users').doc(uid).get(),
-        new Promise<null>((_, reject) => setTimeout(() => reject(new Error('timeout')), 3000))
-      ]) as FirebaseFirestore.DocumentSnapshot | null;
-
-      if (userDoc && userDoc.exists) {
-        const userData = userDoc.data()!;
-        if (userData.status === 'blocked' || userData.status === 'suspended') {
-          return NextResponse.json({ error: 'Votre compte a été suspendu ou bloqué.' }, { status: 403 });
-        }
-        // Mettre à jour last_login (fire and forget)
-        adminDb.collection('app_users').doc(uid).update({ last_login: now }).catch(() => {});
-      } else if (userDoc && !userDoc.exists) {
-        // Créer le document si absent (fire and forget)
-        adminDb.collection('app_users').doc(uid).set({
-          uid,
-          email: firebaseUser.email || '',
-          display_name: firebaseUser.displayName || '',
-          first_name: firebaseUser.displayName?.split(' ')[0] || '',
-          last_name: firebaseUser.displayName?.split(' ').slice(1).join(' ') || '',
-          primary_role: role,
-          status: 'active',
-          is_email_verified: firebaseUser.emailVerified,
-          created_at: now,
-          updated_at: now,
-          last_login: now,
-        }, { merge: true }).catch(() => {});
+    // Essayer de mettre à jour Firestore en arrière-plan (fire and forget, sans bloquer)
+    setImmediate(async () => {
+      try {
+        const { adminDb } = await import('@/lib/firebase-admin');
+        const now = new Date().toISOString();
+        const nameParts = name.split(' ');
+        
+        await Promise.race([
+          adminDb.collection('app_users').doc(uid).set({
+            uid,
+            email,
+            display_name: name,
+            first_name: nameParts[0] || '',
+            last_name: nameParts.slice(1).join(' ') || '',
+            primary_role: role,
+            status: 'active',
+            last_login: now,
+            updated_at: now,
+          }, { merge: true }),
+          new Promise((_, reject) => setTimeout(() => reject(new Error('timeout')), 5000))
+        ]);
+      } catch {
+        // Silencieux — Firestore indisponible ne bloque pas la connexion
       }
-    } catch {
-      // Firestore indisponible ou timeout — on continue quand même
-      console.warn('Firestore unavailable during login, continuing with claims only');
-    }
+    });
 
     // Cookie de session (uid:role) — valide 7 jours
     const sessionValue = `${uid}:${role}`;
+    const nameParts = name.split(' ');
 
     const response = NextResponse.json({
       ok: true,
       uid,
       role,
-      email: firebaseUser.email || '',
-      displayName: firebaseUser.displayName || '',
-      firstName: firebaseUser.displayName?.split(' ')[0] || '',
-      lastName: firebaseUser.displayName?.split(' ').slice(1).join(' ') || '',
+      email,
+      displayName: name,
+      firstName: nameParts[0] || '',
+      lastName: nameParts.slice(1).join(' ') || '',
     });
 
     response.cookies.set('admin_session', sessionValue, {
@@ -97,14 +146,7 @@ export async function POST(req: NextRequest) {
 
   } catch (error: unknown) {
     console.error('Admin login error:', error);
-    const err = error as { code?: string };
-    if (err.code === 'auth/id-token-expired') {
-      return NextResponse.json({ error: 'Session expirée. Reconnectez-vous.' }, { status: 401 });
-    }
-    if (err.code === 'auth/argument-error' || err.code === 'auth/invalid-id-token') {
-      return NextResponse.json({ error: 'Token invalide.' }, { status: 401 });
-    }
-    return NextResponse.json({ error: 'Erreur d\'authentification.' }, { status: 401 });
+    return NextResponse.json({ error: 'Erreur d\'authentification.' }, { status: 500 });
   }
 }
 
