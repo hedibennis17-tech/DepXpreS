@@ -1,14 +1,37 @@
+"use client";
+
+import { useState } from "react";
 import { Button } from "@/components/ui/button";
-import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle } from "@/components/ui/card";
+import {
+  Card,
+  CardContent,
+  CardDescription,
+  CardFooter,
+  CardHeader,
+  CardTitle,
+} from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import Link from "next/link";
+import { AddressAutocompleteInput, type AddressValue } from "@/components/address/AddressAutocompleteInput";
 
 export default function PersonalInfoPage() {
+  const [address, setAddress] = useState<AddressValue | null>(null);
+  const [city, setCity] = useState("");
+  const [postalCode, setPostalCode] = useState("");
+
+  const handleAddressChange = (val: AddressValue | null) => {
+    setAddress(val);
+    if (val) {
+      setCity(val.city || "");
+      setPostalCode(val.postalCode || "");
+    }
+  };
+
   return (
     <Card>
       <CardHeader>
-        <CardTitle>Étape 1: Informations personnelles</CardTitle>
+        <CardTitle>Étape 1 : Informations personnelles</CardTitle>
         <CardDescription>
           Commençons par vos informations de base.
         </CardDescription>
@@ -30,18 +53,39 @@ export default function PersonalInfoPage() {
           <Label htmlFor="phone">Téléphone</Label>
           <Input id="phone" type="tel" placeholder="(514) 123-4567" />
         </div>
+
+        {/* Adresse avec autocomplete BDOA */}
         <div className="space-y-2 md:col-span-2">
-          <Label htmlFor="address">Adresse</Label>
-          <Input id="address" placeholder="123 rue de la Main" />
+          <AddressAutocompleteInput
+            label="Adresse résidentielle"
+            placeholder="Commencez à taper votre adresse..."
+            value={address || undefined}
+            onChange={handleAddressChange}
+            province="QC"
+            showCurrentLocationButton={true}
+            required
+          />
         </div>
+
         <div className="space-y-2">
           <Label htmlFor="city">Ville</Label>
-          <Input id="city" placeholder="Montréal" />
+          <Input
+            id="city"
+            placeholder="Montréal"
+            value={city}
+            onChange={(e) => setCity(e.target.value)}
+          />
         </div>
         <div className="space-y-2">
           <Label htmlFor="postal-code">Code postal</Label>
-          <Input id="postal-code" placeholder="H1H 1H1" />
+          <Input
+            id="postal-code"
+            placeholder="H1H 1H1"
+            value={postalCode}
+            onChange={(e) => setPostalCode(e.target.value)}
+          />
         </div>
+
         <div className="space-y-2">
           <Label htmlFor="dob">Date de naissance</Label>
           <Input id="dob" type="date" />
@@ -49,7 +93,7 @@ export default function PersonalInfoPage() {
       </CardContent>
       <CardFooter className="flex justify-end">
         <Button asChild>
-          <Link href="/driver/wizard/vehicle">Suivant: Véhicule</Link>
+          <Link href="/driver/wizard/vehicle">Suivant : Véhicule</Link>
         </Button>
       </CardFooter>
     </Card>

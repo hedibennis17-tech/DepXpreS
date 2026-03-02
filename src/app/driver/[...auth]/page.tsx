@@ -2,9 +2,13 @@ import AuthLayout from "@/app/auth/layout";
 import DriverLoginPage from "../login/page";
 import DriverSignupPage from "../signup/page";
 
-export default function DriverAuthPages({ params }: { params: { auth: string[] } }) {
-  const page = params.auth?.[0];
+interface Props {
+  params: Promise<{ auth: string[] }>;
+}
 
+export default async function DriverAuthPages({ params }: Props) {
+  const { auth } = await params;
+  const page = auth?.[0];
   return (
     <AuthLayout>
       {page === 'login' && <DriverLoginPage />}

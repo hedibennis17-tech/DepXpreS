@@ -2,6 +2,7 @@
 'use client';
 import { useState, useEffect } from 'react';
 import { useRouter } from 'next/navigation';
+import { AddressAutocompleteInput, type AddressValue } from '@/components/address/AddressAutocompleteInput';
 
 interface Store { id: string; name: string; address: string; }
 interface Product { id: string; name: string; price: number; categoryName: string; }
@@ -16,6 +17,7 @@ export default function Page() {
   const [selectedClient, setSelectedClient] = useState('');
   const [selectedItems, setSelectedItems] = useState<{productId: string; name: string; qty: number; price: number}[]>([]);
   const [deliveryAddress, setDeliveryAddress] = useState('');
+  const [deliveryAddressObj, setDeliveryAddressObj] = useState<AddressValue | null>(null);
   const [note, setNote] = useState('');
   const [loading, setLoading] = useState(false);
   const [submitting, setSubmitting] = useState(false);
@@ -102,8 +104,18 @@ export default function Page() {
             {clients.map(c => <option key={c.id} value={c.id}>{c.fullName} — {c.phone}</option>)}
           </select>
           <div>
-            <label className="text-sm font-medium">Adresse de livraison *</label>
-            <input type="text" value={deliveryAddress} onChange={e => setDeliveryAddress(e.target.value)} placeholder="123 Rue Sainte-Catherine, Montréal, QC" className="w-full mt-1 rounded-lg border border-input bg-background px-3 py-2 text-sm" />
+            <AddressAutocompleteInput
+              label="Adresse de livraison"
+              placeholder="123 Rue Sainte-Catherine, Montréal..."
+              value={deliveryAddressObj || undefined}
+              onChange={(val) => {
+                setDeliveryAddressObj(val);
+                setDeliveryAddress(val?.fullLabel || val?.line1 || '');
+              }}
+              province="QC"
+              showCurrentLocationButton={true}
+              required
+            />
           </div>
           <div>
             <label className="text-sm font-medium">Note pour le chauffeur</label>

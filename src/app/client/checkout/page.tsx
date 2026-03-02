@@ -1,5 +1,4 @@
 "use client";
-
 import { useState } from "react";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
@@ -21,6 +20,7 @@ import {
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { PRODUCTS } from "@/lib/data";
+import { AddressAutocompleteInput, type AddressValue } from "@/components/address/AddressAutocompleteInput";
 
 const cartItems = [
   { product: PRODUCTS[4], quantity: 2 },
@@ -34,6 +34,9 @@ export default function CheckoutPage() {
   const [promoCode, setPromoCode] = useState("");
   const [promoApplied, setPromoApplied] = useState(false);
   const [isProcessing, setIsProcessing] = useState(false);
+  const [deliveryAddress, setDeliveryAddress] = useState<AddressValue | null>(null);
+  const [apt, setApt] = useState("");
+  const [deliveryInstructions, setDeliveryInstructions] = useState("");
 
   const subtotal = cartItems.reduce((sum, item) => sum + item.product.price * item.quantity, 0);
   const delivery = 6.99;
@@ -48,6 +51,10 @@ export default function CheckoutPage() {
   };
 
   const handleOrder = async () => {
+    if (!deliveryAddress) {
+      alert("Veuillez entrer votre adresse de livraison.");
+      return;
+    }
     setIsProcessing(true);
     await new Promise((r) => setTimeout(r, 2000));
     router.push("/client/order");
@@ -61,9 +68,7 @@ export default function CheckoutPage() {
           Retour au catalogue
         </Link>
       </Button>
-
       <h1 className="text-2xl font-bold mb-6">Finaliser la commande</h1>
-
       <div className="grid grid-cols-1 lg:grid-cols-5 gap-6">
         {/* Left — Delivery & Payment */}
         <div className="lg:col-span-3 space-y-6">
@@ -76,29 +81,63 @@ export default function CheckoutPage() {
               </CardTitle>
             </CardHeader>
             <CardContent className="space-y-4">
-              <div className="grid grid-cols-2 gap-4">
-                <div>
-                  <Label htmlFor="street">Rue</Label>
-                  <Input id="street" placeholder="123 Rue Principale" defaultValue="456 Boul. St-Martin" />
+              {/* Autocomplete BDOA */}
+              <AddressAutocompleteInput
+                label="Adresse"
+                placeholder="Commencez à taper votre adresse..."
+                value={deliveryAddress || undefined}
+                onChange={setDeliveryAddress}
+                province="QC"
+                showCurrentLocationButton={true}
+                required
+              />
+
+              {/* Afficher les champs remplis automatiquement */}
+              {deliveryAddress && (
+                <div className="grid grid-cols-2 gap-3 p-3 bg-green-50 rounded-lg border border-green-200">
+                  <div>
+                    <p className="text-xs text-gray-500">Ville</p>
+                    <p className="text-sm font-medium">{deliveryAddress.city || "—"}</p>
+                  </div>
+                  <div>
+                    <p className="text-xs text-gray-500">Code postal</p>
+                    <p className="text-sm font-medium">{deliveryAddress.postalCode || "—"}</p>
+                  </div>
+                  <div>
+                    <p className="text-xs text-gray-500">Province</p>
+                    <p className="text-sm font-medium">{deliveryAddress.provinceCode || "QC"}</p>
+                  </div>
+                  {deliveryAddress.latitude && deliveryAddress.longitude && (
+                    <div>
+                      <p className="text-xs text-gray-500">GPS</p>
+                      <p className="text-xs font-mono text-gray-600">
+                        {deliveryAddress.latitude.toFixed(4)}, {deliveryAddress.longitude.toFixed(4)}
+                      </p>
+                    </div>
+                  )}
                 </div>
+              )}
+
+              <div className="grid grid-cols-2 gap-4">
                 <div>
                   <Label htmlFor="apt">Apt / Suite</Label>
-                  <Input id="apt" placeholder="Apt 4B" />
+                  <Input
+                    id="apt"
+                    placeholder="Apt 4B"
+                    value={apt}
+                    onChange={(e) => setApt(e.target.value)}
+                  />
                 </div>
               </div>
-              <div className="grid grid-cols-2 gap-4">
-                <div>
-                  <Label htmlFor="city">Ville</Label>
-                  <Input id="city" defaultValue="Laval" />
-                </div>
-                <div>
-                  <Label htmlFor="postal">Code postal</Label>
-                  <Input id="postal" defaultValue="H7W 1A1" />
-                </div>
-              </div>
+
               <div>
                 <Label htmlFor="instructions">Instructions de livraison</Label>
-                <Input id="instructions" placeholder="Ex: Sonner à la porte 2" />
+                <Input
+                  id="instructions"
+                  placeholder="Ex: Sonner à la porte 2"
+                  value={deliveryInstructions}
+                  onChange={(e) => setDeliveryInstructions(e.target.value)}
+                />
               </div>
             </CardContent>
           </Card>
@@ -171,15 +210,15 @@ export default function CheckoutPage() {
                     </div>
                     <div>
                       <Label>Nom sur la carte</Label>
-                      <Input placeholder="Prénom Nom" />
+                      <Input placeholder="Jean Tremblay" />
                     </div>
                   </div>
                 )}
                 <div className="flex items-center space-x-3 rounded-lg border p-3 cursor-pointer hover:bg-secondary/50">
                   <RadioGroupItem value="cash" id="cash" />
                   <Label htmlFor="cash" className="cursor-pointer flex-1">
-                    <div className="font-medium">Paiement à la livraison</div>
-                    <div className="text-sm text-muted-foreground">Espèces uniquement</div>
+                    <div className="font-medium">Comptant à la livraison</div>
+                    <div className="text-sm text-muted-foreground">Payer en espèces</div>
                   </Label>
                 </div>
               </RadioGroup>
@@ -188,115 +227,95 @@ export default function CheckoutPage() {
         </div>
 
         {/* Right — Order Summary */}
-        <div className="lg:col-span-2">
-          <Card className="sticky top-20">
+        <div className="lg:col-span-2 space-y-4">
+          <Card className="sticky top-4">
             <CardHeader>
-              <CardTitle className="text-base">Votre commande</CardTitle>
+              <CardTitle className="text-base flex items-center gap-2">
+                <Truck className="h-4 w-4 text-primary" />
+                Résumé de commande
+              </CardTitle>
             </CardHeader>
             <CardContent className="space-y-4">
-              {/* Items */}
-              <div className="space-y-3">
-                {cartItems.map((item, i) => (
-                  <div key={i} className="flex justify-between text-sm">
-                    <span className="text-muted-foreground">
-                      {item.quantity}x {item.product.name}
-                    </span>
-                    <span className="font-medium">
-                      ${(item.product.price * item.quantity).toFixed(2)}
-                    </span>
-                  </div>
-                ))}
-              </div>
-
+              {cartItems.map(({ product, quantity }) => (
+                <div key={product.id} className="flex justify-between text-sm">
+                  <span className="text-muted-foreground">
+                    {product.name} × {quantity}
+                  </span>
+                  <span>${(product.price * quantity).toFixed(2)}</span>
+                </div>
+              ))}
               <Separator />
+              <div className="flex justify-between text-sm">
+                <span className="text-muted-foreground">Sous-total</span>
+                <span>${subtotal.toFixed(2)}</span>
+              </div>
+              <div className="flex justify-between text-sm">
+                <span className="text-muted-foreground">Livraison</span>
+                <span>${delivery.toFixed(2)}</span>
+              </div>
+              {promoApplied && (
+                <div className="flex justify-between text-sm text-green-600">
+                  <span>Rabais (10%)</span>
+                  <span>-${discount.toFixed(2)}</span>
+                </div>
+              )}
+              <div className="flex justify-between text-sm">
+                <span className="text-muted-foreground">TPS + TVQ (14.975%)</span>
+                <span>${taxes.toFixed(2)}</span>
+              </div>
+              <Separator />
+              <div className="flex justify-between font-bold">
+                <span>Total</span>
+                <span>${total.toFixed(2)}</span>
+              </div>
 
               {/* Promo Code */}
-              <div className="space-y-2">
-                <Label className="text-sm font-medium flex items-center gap-1">
-                  <Tag className="h-3 w-3" />
-                  Code promo
-                </Label>
-                <div className="flex gap-2">
-                  <Input
-                    placeholder="DEPXPRES1"
-                    value={promoCode}
-                    onChange={(e) => setPromoCode(e.target.value)}
-                    className="text-sm"
-                    disabled={promoApplied}
-                  />
-                  <Button
-                    variant="outline"
-                    size="sm"
-                    onClick={handlePromo}
-                    disabled={promoApplied}
-                  >
-                    {promoApplied ? <CheckCircle2 className="h-4 w-4 text-green-600" /> : "Appliquer"}
-                  </Button>
-                </div>
-                {promoApplied && (
-                  <p className="text-xs text-green-600 flex items-center gap-1">
-                    <CheckCircle2 className="h-3 w-3" />
-                    Réduction de 10% appliquée !
-                  </p>
-                )}
+              <div className="flex gap-2">
+                <Input
+                  placeholder="Code promo"
+                  value={promoCode}
+                  onChange={(e) => setPromoCode(e.target.value)}
+                  className="text-sm"
+                />
+                <Button variant="outline" size="sm" onClick={handlePromo}>
+                  <Tag className="h-3.5 w-3.5" />
+                </Button>
               </div>
-
-              <Separator />
-
-              {/* Totals */}
-              <div className="space-y-2 text-sm">
-                <div className="flex justify-between text-muted-foreground">
-                  <span>Sous-total</span>
-                  <span>${subtotal.toFixed(2)}</span>
+              {promoApplied && (
+                <div className="flex items-center gap-1 text-xs text-green-600">
+                  <CheckCircle2 className="h-3.5 w-3.5" />
+                  Code DEPXPRES1 appliqué!
                 </div>
-                {promoApplied && (
-                  <div className="flex justify-between text-green-600">
-                    <span>Réduction (10%)</span>
-                    <span>-${discount.toFixed(2)}</span>
-                  </div>
-                )}
-                <div className="flex justify-between text-muted-foreground">
-                  <span className="flex items-center gap-1">
-                    <Truck className="h-3 w-3" />
-                    Livraison
-                  </span>
-                  <span>${delivery.toFixed(2)}</span>
-                </div>
-                <div className="flex justify-between text-muted-foreground">
-                  <span>Taxes (TPS+TVQ)</span>
-                  <span>${taxes.toFixed(2)}</span>
-                </div>
-              </div>
+              )}
 
-              <Separator />
-
-              <div className="flex justify-between font-bold text-lg">
-                <span>Total</span>
-                <span className="text-primary">${total.toFixed(2)}</span>
-              </div>
+              {/* Address summary */}
+              {deliveryAddress && (
+                <div className="p-2 bg-orange-50 rounded text-xs text-orange-700 border border-orange-200">
+                  <MapPin className="h-3 w-3 inline mr-1" />
+                  {deliveryAddress.fullLabel || deliveryAddress.line1}
+                  {apt ? `, ${apt}` : ""}
+                </div>
+              )}
 
               <Button
-                size="lg"
-                className="w-full gap-2"
+                className="w-full"
                 onClick={handleOrder}
-                disabled={isProcessing}
+                disabled={isProcessing || !deliveryAddress}
               >
                 {isProcessing ? (
                   <>
-                    <div className="h-4 w-4 border-2 border-white border-t-transparent rounded-full animate-spin" />
+                    <Lock className="h-4 w-4 mr-2 animate-spin" />
                     Traitement...
                   </>
                 ) : (
                   <>
-                    <Lock className="h-4 w-4" />
+                    <Lock className="h-4 w-4 mr-2" />
                     Confirmer la commande
                   </>
                 )}
               </Button>
-
-              <p className="text-xs text-center text-muted-foreground flex items-center justify-center gap-1">
-                <Lock className="h-3 w-3" />
-                Paiement sécurisé par Stripe
+              <p className="text-xs text-center text-muted-foreground">
+                Paiement sécurisé SSL 256-bit
               </p>
             </CardContent>
           </Card>
