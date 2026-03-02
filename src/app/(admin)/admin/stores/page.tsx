@@ -2,6 +2,8 @@
 
 import { useState, useEffect, useCallback } from "react";
 import { useRouter } from "next/navigation";
+import { collection, getDocs, query, orderBy } from "firebase/firestore";
+import { db } from "@/lib/firebase";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -34,34 +36,52 @@ const STATUS_CONFIG: Record<string, { label: string; color: string }> = {
 
 export default function StoresPage() {
   const router = useRouter();
-  const [stores, setStores] = useState<StoreItem[]>([]);
+  const [allStores, setAllStores] = useState<StoreItem[]>([]);
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
   const [search, setSearch] = useState("");
   const [statusFilter, setStatusFilter] = useState("all");
-  const [total, setTotal] = useState(0);
 
   const fetchStores = useCallback(async (isRefresh = false) => {
     if (isRefresh) setRefreshing(true); else setLoading(true);
     try {
-      const params = new URLSearchParams();
-      if (search) params.set("search", search);
-      if (statusFilter !== "all") params.set("status", statusFilter);
-      const res = await fetch(`/api/admin/stores?${params}`);
-      const data = await res.json();
-      setStores(data.stores || []);
-      setTotal(data.total || 0);
-    } catch (err) { console.error(err); }
+      // Charger directement via Firebase Client SDK
+      const snap = await getDocs(query(collection(db, "stores"), orderBy("name")));
+      const data = snap.docs.map(d => {
+        const raw = d.data();
+        return {
+          id: d.id,
+          name: raw.name || raw.storeName || "Dépanneur",
+          address: raw.address || raw.fullAddress || "",
+          phone: raw.phone || raw.phoneNumber || "",
+          status: raw.status || "active",
+          isOpen: raw.isOpen === true,
+          rating: Number(raw.rating) || 0,
+          totalOrders: Number(raw.totalOrders) || 0,
+          totalRevenue: Number(raw.totalRevenue) || 0,
+          zoneName: raw.zoneName || raw.zone || "",
+          createdAt: raw.createdAt ? (typeof raw.createdAt === 'object' && 'toDate' in raw.createdAt ? (raw.createdAt as { toDate: () => Date }).toDate().toISOString() : String(raw.createdAt)) : "",
+        } as StoreItem;
+      });
+      setAllStores(data);
+    } catch (err) { console.error("Stores error:", err); }
     finally { setLoading(false); setRefreshing(false); }
-  }, [search, statusFilter]);
+  }, []);
 
   useEffect(() => { fetchStores(); }, [fetchStores]);
 
+  // Filtrage côté client
+  const stores = allStores.filter(s => {
+    const matchSearch = !search || s.name.toLowerCase().includes(search.toLowerCase()) || (s.address || "").toLowerCase().includes(search.toLowerCase());
+    const matchStatus = statusFilter === "all" || s.status === statusFilter;
+    return matchSearch && matchStatus;
+  });
+
   const stats = {
-    total,
-    active: stores.filter((s) => s.status === "active").length,
-    open: stores.filter((s) => s.isOpen).length,
-    totalOrders: stores.reduce((sum, s) => sum + (s.totalOrders || 0), 0),
+    total: allStores.length,
+    active: allStores.filter((s) => s.status === "active").length,
+    open: allStores.filter((s) => s.isOpen).length,
+    totalOrders: allStores.reduce((sum, s) => sum + (s.totalOrders || 0), 0),
   };
 
   return (
@@ -69,7 +89,7 @@ export default function StoresPage() {
       <div className="flex items-center justify-between">
         <div>
           <h1 className="text-3xl font-bold tracking-tight">Dépanneurs partenaires</h1>
-          <p className="text-muted-foreground">{total} dépanneur{total !== 1 ? "s" : ""} — Firebase temps réel</p>
+          <p className="text-muted-foreground">{allStores.length} dépanneur{allStores.length !== 1 ? "s" : ""} — Firebase temps réel</p>
         </div>
         <Button variant="outline" size="sm" onClick={() => fetchStores(true)} disabled={refreshing} className="gap-2">
           <RefreshCw className={cn("h-4 w-4", refreshing && "animate-spin")} /> Actualiser
