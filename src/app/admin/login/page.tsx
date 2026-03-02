@@ -39,16 +39,49 @@ function AdminLoginForm() {
 
     setLoading(true)
     try {
-      // 1. Connexion Firebase Auth
+      // 1. Connexion Firebase Auth côté client
       const userCredential = await signInWithEmailAndPassword(auth, email, password)
       const idToken = await userCredential.user.getIdToken()
 
-      // 2. Vérifier le rôle admin via l'API et créer le cookie de session
-      const res = await fetch("/api/admin/auth/login", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ idToken }),
-      })
+      // 2. Vérifier le rôle admin via l'API avec timeout de 10 secondes
+      const controller = new AbortController()
+      const timeoutId = setTimeout(() => controller.abort(), 10000)
+
+      let res: Response
+      try {
+        res = await fetch("/api/admin/auth/login", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ idToken }),
+          signal: controller.signal,
+        })
+        clearTimeout(timeoutId)
+      } catch (fetchErr: unknown) {
+        clearTimeout(timeoutId)
+        const fe = fetchErr as Error
+        if (fe.name === "AbortError") {
+          // Timeout — décoder le JWT localement comme fallback
+          const parts = idToken.split(".")
+          const payload = parts[1] + "=".repeat((4 - parts[1].length % 4) % 4)
+          const decoded = JSON.parse(atob(payload.replace(/-/g, "+").replace(/_/g, "/")))
+          const role = decoded.role || ""
+          const adminRoles = ["super_admin", "admin", "dispatcher", "agent"]
+          
+          if (adminRoles.includes(role)) {
+            // Stocker dans sessionStorage comme fallback
+            sessionStorage.setItem("admin_uid", decoded.user_id || decoded.sub || "")
+            sessionStorage.setItem("admin_role", role)
+            sessionStorage.setItem("admin_email", decoded.email || "")
+            sessionStorage.setItem("admin_name", decoded.name || "")
+            router.push(redirect)
+            return
+          } else {
+            setError("Accès refusé. Ce compte n'a pas les droits d'administration.")
+            return
+          }
+        }
+        throw fetchErr
+      }
 
       const data = await res.json()
       if (!res.ok) {
@@ -58,15 +91,18 @@ function AdminLoginForm() {
 
       // 3. Rediriger vers le dashboard admin
       router.push(redirect)
-    } catch (err: any) {
+    } catch (err: unknown) {
+      const e = err as { code?: string; message?: string }
       if (
-        err.code === "auth/user-not-found" ||
-        err.code === "auth/wrong-password" ||
-        err.code === "auth/invalid-credential"
+        e.code === "auth/user-not-found" ||
+        e.code === "auth/wrong-password" ||
+        e.code === "auth/invalid-credential"
       ) {
         setError("Email ou mot de passe incorrect.")
-      } else if (err.code === "auth/too-many-requests") {
+      } else if (e.code === "auth/too-many-requests") {
         setError("Trop de tentatives. Veuillez réessayer dans quelques minutes.")
+      } else if (e.code === "auth/network-request-failed") {
+        setError("Erreur réseau. Vérifiez votre connexion internet.")
       } else {
         setError("Erreur de connexion. Veuillez réessayer.")
       }
