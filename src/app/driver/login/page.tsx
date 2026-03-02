@@ -1,5 +1,6 @@
 "use client"
 
+import { useState } from "react"
 import { Button } from "@/components/ui/button"
 import {
   Card,
@@ -12,37 +13,115 @@ import {
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
 import Link from "next/link"
+import { useRouter } from "next/navigation"
+import { signInWithEmailAndPassword } from "firebase/auth"
+import { auth } from "@/lib/firebase"
 
 export default function DriverLoginPage() {
+  const router = useRouter()
+  const [email, setEmail] = useState("")
+  const [password, setPassword] = useState("")
+  const [error, setError] = useState("")
+  const [loading, setLoading] = useState(false)
+
+  const handleSubmit = async (e: React.FormEvent) => {
+    e.preventDefault()
+    setError("")
+
+    if (!email || !password) {
+      setError("Email et mot de passe requis.")
+      return
+    }
+
+    setLoading(true)
+    try {
+      const userCredential = await signInWithEmailAndPassword(auth, email, password)
+      const idToken = await userCredential.user.getIdToken()
+
+      const res = await fetch("/api/auth/login", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ idToken }),
+      })
+
+      const data = await res.json()
+      if (!res.ok) {
+        setError(data.error || "Erreur de connexion.")
+        return
+      }
+
+      if (data.role === "driver") {
+        router.push("/driver/dashboard")
+      } else {
+        setError("Ce compte n'est pas un compte chauffeur.")
+      }
+    } catch (err: any) {
+      if (
+        err.code === "auth/user-not-found" ||
+        err.code === "auth/wrong-password" ||
+        err.code === "auth/invalid-credential"
+      ) {
+        setError("Email ou mot de passe incorrect.")
+      } else if (err.code === "auth/too-many-requests") {
+        setError("Trop de tentatives. Veuillez réessayer dans quelques minutes.")
+      } else {
+        setError("Erreur de connexion. Veuillez réessayer.")
+      }
+    } finally {
+      setLoading(false)
+    }
+  }
+
   return (
-     <Card>
+    <Card>
       <CardHeader>
         <CardTitle className="text-2xl">Connexion Chauffeur</CardTitle>
         <CardDescription>
-          Entrez votre email ou téléphone pour recevoir un code de connexion.
+          Connectez-vous à votre espace chauffeur DepXpreS.
         </CardDescription>
       </CardHeader>
-      <CardContent className="space-y-4">
-        <div className="space-y-2">
-          <Label htmlFor="email">Email ou Téléphone</Label>
-          <Input id="email" type="email" placeholder="chauffeur@exemple.com" required />
-        </div>
-        <div className="space-y-2">
-          <Label htmlFor="otp">Code (OTP)</Label>
-          <Input id="otp" type="text" placeholder="123456 (code de test)" required />
-        </div>
-      </CardContent>
-      <CardFooter className="flex flex-col gap-4">
-        <Button asChild className="w-full">
-            <Link href="/driver/dashboard">Se Connecter</Link>
-        </Button>
-        <div className="text-center text-sm text-muted-foreground">
-          Pas encore de compte?{" "}
-          <Link href="/driver/signup" className="font-medium text-primary hover:underline">
-            Devenez chauffeur
-          </Link>
-        </div>
-      </CardFooter>
+      <form onSubmit={handleSubmit}>
+        <CardContent className="space-y-4">
+          {error && (
+            <div className="rounded-md bg-red-50 border border-red-200 px-4 py-3 text-sm text-red-700">
+              {error}
+            </div>
+          )}
+          <div className="space-y-2">
+            <Label htmlFor="email">Email</Label>
+            <Input
+              id="email"
+              type="email"
+              placeholder="chauffeur@exemple.com"
+              value={email}
+              onChange={(e) => { setEmail(e.target.value); setError("") }}
+              required
+            />
+          </div>
+          <div className="space-y-2">
+            <Label htmlFor="password">Mot de passe</Label>
+            <Input
+              id="password"
+              type="password"
+              placeholder="Votre mot de passe"
+              value={password}
+              onChange={(e) => { setPassword(e.target.value); setError("") }}
+              required
+            />
+          </div>
+        </CardContent>
+        <CardFooter className="flex flex-col gap-4">
+          <Button className="w-full" type="submit" disabled={loading}>
+            {loading ? "Connexion en cours..." : "Se Connecter"}
+          </Button>
+          <div className="text-center text-sm text-muted-foreground">
+            Pas encore chauffeur?{" "}
+            <Link href="/driver/signup" className="font-medium text-primary hover:underline">
+              Inscrivez-vous
+            </Link>
+          </div>
+        </CardFooter>
+      </form>
     </Card>
   )
 }
