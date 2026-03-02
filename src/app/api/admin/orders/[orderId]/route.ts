@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { adminDb } from "@/lib/firebase-admin";
+import { serializeDoc, serializeDocs } from '@/lib/firestore-serialize';
 
 function serializeDoc(data: FirebaseFirestore.DocumentData) {
   const result: Record<string, unknown> = {};

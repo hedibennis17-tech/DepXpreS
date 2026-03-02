@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { adminDb } from '@/lib/firebase-admin';
+import { serializeDoc, serializeDocs } from '@/lib/firestore-serialize';
 
 export async function PATCH(req: NextRequest, { params }: { params: Promise<{ driverId: string }> }) {
   try {

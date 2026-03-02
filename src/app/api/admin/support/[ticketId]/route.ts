@@ -1,12 +1,13 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { adminDb } from '@/lib/firebase-admin';
+import { serializeDoc, serializeDocs } from '@/lib/firestore-serialize';
 
 export async function GET(_: NextRequest, { params }: { params: Promise<{ ticketId: string }> }) {
   try {
     const { ticketId } = await params;
     const doc = await adminDb.collection('support_tickets').doc(ticketId).get();
     if (!doc.exists) return NextResponse.json({ error: 'Not found' }, { status: 404 });
-    return NextResponse.json({ ticket: { id: doc.id, ...doc.data() } });
+    return NextResponse.json({ ticket: serializeDoc({ id: doc.id, ...doc.data() }) });
   } catch (e) {
     return NextResponse.json({ error: String(e) }, { status: 500 });
   }

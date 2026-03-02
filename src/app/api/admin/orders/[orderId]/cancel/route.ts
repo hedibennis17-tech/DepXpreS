@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { adminDb } from "@/lib/firebase-admin";
 import { FieldValue } from "firebase-admin/firestore";
+import { serializeDoc, serializeDocs } from '@/lib/firestore-serialize';
 
 export async function POST(
   req: NextRequest,

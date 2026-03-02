@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { adminDb } from '@/lib/firebase-admin';
+import { serializeDoc, serializeDocs } from '@/lib/firestore-serialize';
 
 export async function GET(_: NextRequest, { params }: { params: Promise<{ storeId: string }> }) {
   try {
@@ -7,7 +8,7 @@ export async function GET(_: NextRequest, { params }: { params: Promise<{ storeI
     const doc = await adminDb.collection('stores').doc(storeId).get();
     if (!doc.exists) return NextResponse.json({ error: 'Not found' }, { status: 404 });
     
-    const store = { id: doc.id, ...doc.data() };
+    const store = serializeDoc({ id: doc.id, ...doc.data() });
     
     const [ordersSnap, productsSnap, reviewsSnap] = await Promise.all([
       adminDb.collection('orders').where('storeId', '==', storeId).get(),

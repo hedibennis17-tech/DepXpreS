@@ -1,6 +1,16 @@
-"use client";
+'use client';
 
 import { useState, useEffect } from "react";
+import dynamic from 'next/dynamic';
+
+const GoogleMapView = dynamic(() => import('@/components/maps/GoogleMapView'), {
+  ssr: false,
+  loading: () => (
+    <div className="flex items-center justify-center h-48 bg-gray-100 rounded-lg">
+      <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-orange-500" />
+    </div>
+  ),
+});
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -80,6 +90,27 @@ export default function OrderTrackingPage() {
             </div>
           </div>
           <Progress value={progressValue} className="mt-4 h-2" />
+        </CardContent>
+      </Card>
+
+      {/* Carte Google Maps — position du chauffeur */}
+      <Card className="mb-6 overflow-hidden">
+        <CardHeader className="pb-2">
+          <CardTitle className="text-base flex items-center gap-2">
+            <MapPin className="h-4 w-4 text-orange-500" />
+            Position du chauffeur en temps réel
+          </CardTitle>
+        </CardHeader>
+        <CardContent className="p-0">
+          <GoogleMapView
+            center={{ lat: 45.5631, lng: -73.7124 }}
+            zoom={14}
+            markers={[
+              { id: 'driver', lat: 45.5631, lng: -73.7124, type: 'driver', label: 'Votre chauffeur', status: 'En route', info: 'Arrivée dans ~12 min' },
+              { id: 'delivery', lat: 45.5580, lng: -73.7050, type: 'client', label: 'Adresse de livraison', status: 'Destination', info: 'Chomedey, Laval, QC' },
+            ]}
+            height="220px"
+          />
         </CardContent>
       </Card>
 
