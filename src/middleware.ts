@@ -38,6 +38,7 @@ const PUBLIC_ROUTES = [
   '/api/address/resolve',
   '/api/address/reverse',
   '/api/admin/test',
+  '/api/admin/debug',
 ];
 
 // ── Rôles autorisés à accéder au dashboard admin ────────────────────────────
