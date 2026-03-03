@@ -94,7 +94,7 @@ export default function StoreSettlementBlock({
     setActionLoading(true);
     setError(null);
     try {
-      const res = await fetch(`/api/admin/store-settlements/${orderId}/calculate`, {
+      const res = await fetch(`/api/admin/store-settlements/by-order/${orderId}/calculate`, {
         method: 'POST',
         headers: { Authorization: `Bearer ${adminToken}` },
       });

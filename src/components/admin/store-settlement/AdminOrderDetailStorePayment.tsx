@@ -200,7 +200,7 @@ export default function AdminOrderDetailStorePayment({
       setError(null);
       setMessage(null);
 
-      await jsonFetch<{ ok: boolean; settlementId: string }>(`/api/admin/store-settlements/${orderId}/calculate`, {
+      await jsonFetch<{ ok: boolean; settlementId: string }>(`/api/admin/store-settlements/by-order/${orderId}/calculate`, {
         method: "POST",
         body: JSON.stringify({ mode: strictMode ? "strict" : "soft" }),
       });
