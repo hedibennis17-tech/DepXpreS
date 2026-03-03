@@ -37,6 +37,7 @@ function decodeJWT(token: string): Record<string, unknown> | null {
 // Définir un cookie côté client (lu par le middleware Next.js)
 function setClientCookie(name: string, value: string, days: number) {
   const expires = new Date(Date.now() + days * 24 * 60 * 60 * 1000).toUTCString()
+  // SameSite=Lax compatible avec tous les navigateurs modernes
   document.cookie = `${name}=${encodeURIComponent(value)};expires=${expires};path=/;SameSite=Lax`
 }
 
@@ -63,6 +64,7 @@ function AdminLoginForm() {
     try {
       // 1. Connexion Firebase Auth côté client
       const userCredential = await signInWithEmailAndPassword(auth, email, password)
+      // Forcer le refresh du token pour obtenir les custom claims à jour
       const idToken = await userCredential.user.getIdToken(true)
 
       // 2. Décoder le JWT localement pour extraire le rôle
@@ -72,27 +74,43 @@ function AdminLoginForm() {
         return
       }
 
-      const role = (claims.role as string) || ""
+      let role = (claims.role as string) || ""
       const uid = (claims.user_id as string) || (claims.sub as string) || ""
 
-      // 3. Vérifier que c'est bien un rôle admin
+      // 3. Si pas de custom claim "role", vérifier via l'API (Firestore)
       if (!role || !ADMIN_ROLES.includes(role)) {
-        setError("Accès refusé. Ce compte n'a pas les droits d'administration.")
-        return
+        try {
+          const verifyRes = await fetch("/api/admin/auth/verify", {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({ idToken, uid, email }),
+          })
+          const verifyData = await verifyRes.json()
+          if (verifyData.ok && verifyData.role && ADMIN_ROLES.includes(verifyData.role)) {
+            role = verifyData.role
+          } else {
+            setError("Accès refusé. Ce compte n'a pas les droits d'administration.")
+            return
+          }
+        } catch {
+          setError("Accès refusé. Ce compte n'a pas les droits d'administration.")
+          return
+        }
       }
 
       // 4. Stocker le cookie de session (lu par le middleware Next.js)
       setClientCookie("admin_session", `${uid}:${role}`, 7)
       setClientCookie("admin_token", idToken, 1)
 
-      // 5. Appel API en arrière-plan pour créer le cookie httpOnly (sans bloquer)
-      fetch("/api/admin/auth/login", {
+      // 5. Appel API pour créer le cookie httpOnly côté serveur
+      await fetch("/api/admin/auth/login", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ idToken }),
+        body: JSON.stringify({ idToken, role }),
+        credentials: "include",
       }).catch(() => {})
 
-      // 6. Rediriger immédiatement vers le dashboard admin
+      // 6. Rediriger vers le dashboard admin
       router.push(redirect)
     } catch (err: unknown) {
       const e = err as { code?: string; message?: string }
@@ -165,7 +183,7 @@ function AdminLoginForm() {
           </form>
         </Card>
         <p className="text-center text-xs text-muted-foreground">
-          Accès réservé à l'équipe DepXpreS (super admin, admin, dispatcher, agent)
+          Accès réservé à l&apos;équipe DepXpreS (super admin, admin, dispatcher, agent)
         </p>
       </div>
     </div>

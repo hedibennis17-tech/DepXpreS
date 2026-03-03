@@ -26,7 +26,7 @@ function decodeJWT(token: string): Record<string, unknown> | null {
 export async function POST(req: NextRequest) {
   try {
     const body = await req.json();
-    const { idToken } = body;
+    const { idToken, role: bodyRole } = body;
 
     if (!idToken || typeof idToken !== 'string') {
       return NextResponse.json({ error: 'Token requis.' }, { status: 400 });
@@ -59,7 +59,8 @@ export async function POST(req: NextRequest) {
 
     const uid = (claims.user_id || claims.sub) as string;
     const email = (claims.email as string) || '';
-    const role = (claims.role as string) || '';
+    // Accepter le rôle depuis les custom claims OU depuis le body (fallback verify API)
+    const role = (claims.role as string) || (bodyRole as string) || '';
     const name = (claims.name as string) || '';
 
     if (!uid) {
