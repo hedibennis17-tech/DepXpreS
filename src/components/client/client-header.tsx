@@ -1,4 +1,9 @@
+'use client';
+import { useState, useEffect } from 'react';
 import Link from 'next/link';
+import { auth } from '@/lib/firebase';
+import { onAuthStateChanged, signOut, User as FirebaseUser } from 'firebase/auth';
+import { useRouter } from 'next/navigation';
 import { Button } from '@/components/ui/button';
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuLabel, DropdownMenuSeparator, DropdownMenuTrigger } from '@/components/ui/dropdown-menu';
@@ -8,11 +13,31 @@ import { Logo } from '../logo';
 
 const navLinks = [
   { href: '/client', label: 'Commander' },
-  { href: '/account/activities', label: 'Activités' },
+  { href: '/client/activities', label: 'Activités' },
 ];
 
 export function ClientHeader() {
-  const isLoggedIn = true; // Mock login state
+  const [user, setUser] = useState<FirebaseUser | null>(null);
+  const [loading, setLoading] = useState(true);
+  const router = useRouter();
+
+  useEffect(() => {
+    const unsubscribe = onAuthStateChanged(auth, (firebaseUser) => {
+      setUser(firebaseUser);
+      setLoading(false);
+    });
+    return () => unsubscribe();
+  }, []);
+
+  const handleSignOut = async () => {
+    await signOut(auth);
+    router.push('/client/login');
+  };
+
+  const getInitials = (name: string | null) => {
+    if (!name) return 'U';
+    return name.split(' ').map((n: string) => n[0]).join('').toUpperCase().slice(0, 2);
+  };
 
   return (
     <header className="sticky top-0 z-40 w-full border-b bg-background/95 backdrop-blur supports-[backdrop-filter]:bg-background/60">
@@ -72,42 +97,62 @@ export function ClientHeader() {
               </DropdownMenuContent>
             </DropdownMenu>
             
-            {isLoggedIn ? (
+            {loading ? (
+              <div className="h-8 w-8 rounded-full bg-muted animate-pulse" />
+            ) : user ? (
               <DropdownMenu>
                 <DropdownMenuTrigger asChild>
                   <Button variant="ghost" className="relative h-8 w-8 rounded-full">
                     <Avatar className="h-8 w-8">
-                      <AvatarImage src="https://picsum.photos/seed/101/200/200" alt="User avatar" data-ai-hint="person portrait" />
-                      <AvatarFallback>HB</AvatarFallback>
+                      {user.photoURL && (
+                        <AvatarImage src={user.photoURL} alt={user.displayName || 'User'} />
+                      )}
+                      <AvatarFallback>{getInitials(user.displayName)}</AvatarFallback>
                     </Avatar>
                   </Button>
                 </DropdownMenuTrigger>
                 <DropdownMenuContent align="end">
-                  <DropdownMenuLabel>Mon Compte</DropdownMenuLabel>
+                  <DropdownMenuLabel>
+                    <div>
+                      <p className="font-semibold">{user.displayName || 'Mon Compte'}</p>
+                      <p className="text-xs text-muted-foreground font-normal">{user.email}</p>
+                    </div>
+                  </DropdownMenuLabel>
                   <DropdownMenuSeparator />
-                  <DropdownMenuItem>
-                    <User className="mr-2 h-4 w-4" />
-                    <span>Profil</span>
+                  <DropdownMenuItem asChild>
+                    <Link href="/client/profile">
+                      <User className="mr-2 h-4 w-4" />
+                      <span>Profil</span>
+                    </Link>
                   </DropdownMenuItem>
-                  <DropdownMenuItem>
-                    <Briefcase className="mr-2 h-4 w-4" />
-                    <span>Commandes</span>
+                  <DropdownMenuItem asChild>
+                    <Link href="/client/activities">
+                      <Briefcase className="mr-2 h-4 w-4" />
+                      <span>Commandes</span>
+                    </Link>
                   </DropdownMenuItem>
-                  <DropdownMenuItem>
-                    <Wallet className="mr-2 h-4 w-4" />
-                    <span>Portefeuille</span>
+                  <DropdownMenuItem asChild>
+                    <Link href="/client/wallet">
+                      <Wallet className="mr-2 h-4 w-4" />
+                      <span>Portefeuille</span>
+                    </Link>
                   </DropdownMenuItem>
                   <DropdownMenuSeparator />
-                  <DropdownMenuItem>
+                  <DropdownMenuItem onClick={handleSignOut} className="text-red-600 cursor-pointer">
                     <LogOut className="mr-2 h-4 w-4" />
                     <span>Déconnexion</span>
                   </DropdownMenuItem>
                 </DropdownMenuContent>
               </DropdownMenu>
             ) : (
-              <Button asChild>
-                <Link href="/auth/login">Connexion</Link>
-              </Button>
+              <div className="flex items-center gap-2">
+                <Button variant="ghost" asChild>
+                  <Link href="/client/login">Se connecter</Link>
+                </Button>
+                <Button asChild>
+                  <Link href="/client/signup">S&apos;inscrire</Link>
+                </Button>
+              </div>
             )}
           </div>
         </div>
