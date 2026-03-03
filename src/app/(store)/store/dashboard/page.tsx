@@ -1,19 +1,13 @@
 "use client";
 
-import { useState, useEffect, useCallback } from "react";
+import { useState, useEffect } from "react";
 import { useRouter } from "next/navigation";
 import { collection, query, where, orderBy, limit, onSnapshot, doc, updateDoc, serverTimestamp } from "firebase/firestore";
-import { auth, db } from "@/lib/firebase";
-import { onAuthStateChanged } from "firebase/auth";
-import { Card, CardContent } from "@/components/ui/card";
-import { Badge } from "@/components/ui/badge";
-import { Button } from "@/components/ui/button";
-import { Switch } from "@/components/ui/switch";
+import { db } from "@/lib/firebase";
 import { cn } from "@/lib/utils";
 import {
   ShoppingBag, DollarSign, Clock, Star, Bell,
-  TrendingUp, CheckCircle2, AlertCircle, RefreshCw,
-  ChevronRight, Store
+  RefreshCw, ChevronRight, Store
 } from "lucide-react";
 
 interface Order {
@@ -61,10 +55,16 @@ export default function StoreDashboardPage() {
     avgRating: 0,
   });
   const [loading, setLoading] = useState(true);
+  const [noStore, setNoStore] = useState(false);
 
-  // Charger le storeId depuis localStorage ou Firebase
+  // Charger le storeId depuis localStorage
   useEffect(() => {
     const sid = localStorage.getItem("storeId") || "";
+    if (!sid) {
+      setNoStore(true);
+      setLoading(false);
+      return;
+    }
     setStoreId(sid);
   }, []);
 
@@ -72,10 +72,11 @@ export default function StoreDashboardPage() {
   useEffect(() => {
     if (!storeId) return;
 
+    setLoading(true);
     const today = new Date();
     today.setHours(0, 0, 0, 0);
 
-    // Commandes récentes (toutes)
+    // Commandes récentes
     const recentQ = query(
       collection(db, "orders"),
       where("storeId", "==", storeId),
@@ -92,7 +93,6 @@ export default function StoreDashboardPage() {
 
       setRecentOrders(orders);
 
-      // Calculer stats du jour
       const todayOrders = orders.filter(o => {
         if (!o.createdAt) return false;
         return new Date(o.createdAt) >= today;
@@ -116,7 +116,7 @@ export default function StoreDashboardPage() {
       setLoading(false);
     });
 
-    // Charger les infos du store
+    // Infos du store
     const storeUnsub = onSnapshot(doc(db, "stores", storeId), (snap) => {
       if (snap.exists()) {
         const data = snap.data();
@@ -147,6 +147,28 @@ export default function StoreDashboardPage() {
     }
   };
 
+  // Aucun dépanneur sélectionné
+  if (noStore) {
+    return (
+      <div className="flex flex-col items-center justify-center min-h-[60vh] text-center px-4">
+        <div className="w-16 h-16 rounded-2xl bg-orange-100 flex items-center justify-center mb-4">
+          <Store className="h-8 w-8 text-orange-500" />
+        </div>
+        <h2 className="text-xl font-bold text-gray-900 mb-2">Aucun dépanneur sélectionné</h2>
+        <p className="text-gray-500 text-sm max-w-xs mb-6">
+          Vous êtes connecté en tant que Super Admin. Utilisez le menu de gauche pour choisir un dépanneur à gérer.
+        </p>
+        <button
+          onClick={() => window.location.reload()}
+          className="flex items-center gap-2 px-5 py-2.5 rounded-xl bg-orange-500 text-white text-sm font-medium hover:bg-orange-600 transition-colors"
+        >
+          <RefreshCw className="h-4 w-4" />
+          Recharger
+        </button>
+      </div>
+    );
+  }
+
   if (loading) {
     return (
       <div className="flex items-center justify-center h-64">
@@ -165,21 +187,26 @@ export default function StoreDashboardPage() {
             {new Date().toLocaleDateString("fr-CA", { weekday: "long", day: "numeric", month: "long" })}
           </p>
         </div>
-        <div className="flex items-center gap-3 bg-white rounded-2xl px-4 py-2.5 shadow-sm border">
-          <span className="text-sm font-medium text-gray-700">
-            {isOpen ? "Ouvert" : "Fermé"}
-          </span>
-          <Switch
-            checked={isOpen}
-            onCheckedChange={toggleOpen}
-            disabled={togglingOpen}
-            className="data-[state=checked]:bg-green-500"
-          />
-          <div className={cn(
-            "w-2 h-2 rounded-full",
-            isOpen ? "bg-green-500 animate-pulse" : "bg-gray-300"
-          )} />
-        </div>
+        <button
+          onClick={toggleOpen}
+          disabled={togglingOpen}
+          className={cn(
+            "flex items-center gap-2.5 px-4 py-2.5 rounded-2xl border shadow-sm text-sm font-medium transition-all",
+            isOpen
+              ? "border-green-200 bg-green-50 text-green-700 hover:bg-green-100"
+              : "border-gray-200 bg-white text-gray-600 hover:bg-gray-50"
+          )}
+        >
+          {togglingOpen ? (
+            <RefreshCw className="h-4 w-4 animate-spin" />
+          ) : (
+            <div className={cn(
+              "w-2.5 h-2.5 rounded-full",
+              isOpen ? "bg-green-500 animate-pulse" : "bg-gray-400"
+            )} />
+          )}
+          {isOpen ? "Ouvert" : "Fermé"}
+        </button>
       </div>
 
       {/* Alerte commandes en attente */}
@@ -209,15 +236,13 @@ export default function StoreDashboardPage() {
         ].map(s => {
           const Icon = s.icon;
           return (
-            <Card key={s.label} className={cn("border-0 shadow-sm", s.bg)}>
-              <CardContent className="pt-4 pb-4 px-4">
-                <div className="flex items-center gap-1.5 mb-2">
-                  <Icon className={cn("h-4 w-4", s.color)} />
-                  <p className="text-xs text-gray-500">{s.label}</p>
-                </div>
-                <p className={cn("text-2xl font-bold", s.color)}>{s.value}</p>
-              </CardContent>
-            </Card>
+            <div key={s.label} className={cn("rounded-2xl border-0 shadow-sm p-4", s.bg)}>
+              <div className="flex items-center gap-1.5 mb-2">
+                <Icon className={cn("h-4 w-4", s.color)} />
+                <p className="text-xs text-gray-500">{s.label}</p>
+              </div>
+              <p className={cn("text-2xl font-bold", s.color)}>{s.value}</p>
+            </div>
           );
         })}
       </div>
@@ -226,14 +251,12 @@ export default function StoreDashboardPage() {
       <div className="bg-white rounded-2xl shadow-sm border overflow-hidden">
         <div className="flex items-center justify-between px-5 py-4 border-b">
           <h2 className="font-bold text-gray-900">Commandes récentes</h2>
-          <Button
-            variant="ghost"
-            size="sm"
+          <button
             onClick={() => router.push("/store/orders")}
-            className="text-orange-500 hover:text-orange-600 text-sm"
+            className="flex items-center gap-1 text-orange-500 hover:text-orange-600 text-sm font-medium"
           >
-            Voir tout <ChevronRight className="h-4 w-4 ml-1" />
-          </Button>
+            Voir tout <ChevronRight className="h-4 w-4" />
+          </button>
         </div>
 
         {recentOrders.length === 0 ? (
@@ -254,9 +277,9 @@ export default function StoreDashboardPage() {
                     <span className="font-semibold text-sm text-gray-900">
                       {order.orderNumber || order.id.slice(0, 8).toUpperCase()}
                     </span>
-                    <Badge className={cn("text-xs border-0 px-2", STATUS_COLORS[order.status || "pending"])}>
+                    <span className={cn("text-xs px-2 py-0.5 rounded-full font-medium", STATUS_COLORS[order.status || "pending"])}>
                       {STATUS_LABELS[order.status || "pending"] || order.status}
-                    </Badge>
+                    </span>
                   </div>
                   <p className="text-xs text-gray-500 mt-0.5">
                     {order.clientName || "Client"} •{" "}
@@ -275,38 +298,25 @@ export default function StoreDashboardPage() {
 
       {/* Actions rapides */}
       <div className="grid grid-cols-2 gap-3">
-        <button
-          onClick={() => router.push("/store/orders")}
-          className="bg-white rounded-2xl border shadow-sm p-4 text-left hover:border-orange-300 hover:shadow-md transition-all"
-        >
-          <ShoppingBag className="h-6 w-6 text-orange-500 mb-2" />
-          <p className="font-semibold text-sm text-gray-900">Gérer les commandes</p>
-          <p className="text-xs text-gray-500 mt-0.5">Voir, accepter, préparer</p>
-        </button>
-        <button
-          onClick={() => router.push("/store/catalog")}
-          className="bg-white rounded-2xl border shadow-sm p-4 text-left hover:border-orange-300 hover:shadow-md transition-all"
-        >
-          <Store className="h-6 w-6 text-blue-500 mb-2" />
-          <p className="font-semibold text-sm text-gray-900">Mon catalogue</p>
-          <p className="text-xs text-gray-500 mt-0.5">Produits, prix, stock</p>
-        </button>
-        <button
-          onClick={() => router.push("/store/settlements")}
-          className="bg-white rounded-2xl border shadow-sm p-4 text-left hover:border-orange-300 hover:shadow-md transition-all"
-        >
-          <DollarSign className="h-6 w-6 text-green-500 mb-2" />
-          <p className="font-semibold text-sm text-gray-900">Mes paiements</p>
-          <p className="text-xs text-gray-500 mt-0.5">Revenus et virements</p>
-        </button>
-        <button
-          onClick={() => router.push("/store/schedule")}
-          className="bg-white rounded-2xl border shadow-sm p-4 text-left hover:border-orange-300 hover:shadow-md transition-all"
-        >
-          <Clock className="h-6 w-6 text-purple-500 mb-2" />
-          <p className="font-semibold text-sm text-gray-900">Mes horaires</p>
-          <p className="text-xs text-gray-500 mt-0.5">Heures d'ouverture</p>
-        </button>
+        {[
+          { href: "/store/orders", icon: ShoppingBag, color: "text-orange-500", label: "Gérer les commandes", desc: "Voir, accepter, préparer" },
+          { href: "/store/catalog", icon: Store, color: "text-blue-500", label: "Mon catalogue", desc: "Produits, prix, stock" },
+          { href: "/store/settlements", icon: DollarSign, color: "text-green-500", label: "Mes paiements", desc: "Revenus et virements" },
+          { href: "/store/schedule", icon: Clock, color: "text-purple-500", label: "Mes horaires", desc: "Heures d'ouverture" },
+        ].map(item => {
+          const Icon = item.icon;
+          return (
+            <button
+              key={item.href}
+              onClick={() => router.push(item.href)}
+              className="bg-white rounded-2xl border shadow-sm p-4 text-left hover:border-orange-300 hover:shadow-md transition-all"
+            >
+              <Icon className={cn("h-6 w-6 mb-2", item.color)} />
+              <p className="font-semibold text-sm text-gray-900">{item.label}</p>
+              <p className="text-xs text-gray-500 mt-0.5">{item.desc}</p>
+            </button>
+          );
+        })}
       </div>
     </div>
   );
