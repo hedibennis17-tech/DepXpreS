@@ -49,6 +49,7 @@ const ROLE_LABELS: Record<string, string> = {
   admin: "Administrateur",
   dispatcher: "Dispatcher",
   agent: "Agent Support",
+  store_owner: "Propriétaire Dépanneur",
   client: "Client",
   driver: "Chauffeur",
 }
@@ -58,6 +59,7 @@ const ROLE_COLORS: Record<string, string> = {
   admin: "bg-blue-100 text-blue-800",
   dispatcher: "bg-orange-100 text-orange-800",
   agent: "bg-yellow-100 text-yellow-800",
+  store_owner: "bg-emerald-100 text-emerald-800",
   client: "bg-green-100 text-green-800",
   driver: "bg-cyan-100 text-cyan-800",
 }
@@ -136,6 +138,7 @@ export default function AdminUsersPage() {
   const stats = {
     total: users.length,
     admins: users.filter(u => ["super_admin", "admin", "dispatcher", "agent"].includes(u.primary_role)).length,
+    storeOwners: users.filter(u => u.primary_role === "store_owner").length,
     clients: users.filter(u => u.primary_role === "client").length,
     drivers: users.filter(u => u.primary_role === "driver").length,
     blocked: users.filter(u => u.status === "blocked").length,
@@ -148,19 +151,28 @@ export default function AdminUsersPage() {
           <h1 className="text-2xl font-bold">Gestion des Utilisateurs</h1>
           <p className="text-muted-foreground">Gérez tous les comptes de la plateforme</p>
         </div>
-        <Button asChild>
-          <Link href="/admin/users/create">
-            <Plus className="mr-2 h-4 w-4" />
-            Créer un compte équipe
-          </Link>
-        </Button>
+        <div className="flex gap-2">
+          <Button variant="outline" asChild>
+            <Link href="/admin/users/create?role=store_owner">
+              <Plus className="mr-2 h-4 w-4" />
+              Ajouter un dépanneur
+            </Link>
+          </Button>
+          <Button asChild>
+            <Link href="/admin/users/create">
+              <Plus className="mr-2 h-4 w-4" />
+              Créer un compte équipe
+            </Link>
+          </Button>
+        </div>
       </div>
 
       {/* Stats */}
-      <div className="grid grid-cols-2 md:grid-cols-5 gap-4">
+      <div className="grid grid-cols-2 md:grid-cols-6 gap-4">
         {[
           { label: "Total", value: stats.total, color: "text-gray-900" },
           { label: "Équipe Admin", value: stats.admins, color: "text-blue-600" },
+          { label: "Dépanneurs", value: (stats as any).storeOwners, color: "text-emerald-600" },
           { label: "Clients", value: stats.clients, color: "text-green-600" },
           { label: "Chauffeurs", value: stats.drivers, color: "text-cyan-600" },
           { label: "Bloqués", value: stats.blocked, color: "text-red-600" },
@@ -201,6 +213,7 @@ export default function AdminUsersPage() {
                 <SelectItem value="dispatcher">Dispatcher</SelectItem>
                 <SelectItem value="agent">Agent Support</SelectItem>
                 <SelectItem value="client">Client</SelectItem>
+                <SelectItem value="store_owner">Propriétaire Dépanneur</SelectItem>
                 <SelectItem value="driver">Chauffeur</SelectItem>
               </SelectContent>
             </Select>

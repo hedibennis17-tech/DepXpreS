@@ -1,6 +1,6 @@
 "use client"
 
-import { useState } from "react"
+import { useState, useEffect } from "react"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
@@ -12,30 +12,90 @@ import {
   SelectValue,
 } from "@/components/ui/select"
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
-import { ArrowLeft, CheckCircle } from "lucide-react"
+import { Badge } from "@/components/ui/badge"
+import { ArrowLeft, CheckCircle, Store, Shield, Truck, Headphones, Settings } from "lucide-react"
 import Link from "next/link"
-import { useRouter } from "next/navigation"
+import { useRouter, useSearchParams } from "next/navigation"
+import { Suspense } from "react"
 
-const ROLE_DESCRIPTIONS: Record<string, string> = {
-  admin: "Accès complet aux opérations : commandes, clients, chauffeurs, stores, zones, support, finances.",
-  dispatcher: "Gestion des commandes, assignation des chauffeurs, suivi dispatch et tracking.",
-  agent: "Support client, gestion des tickets et litiges, accès lecture aux commandes et clients.",
+interface StoreOption {
+  id: string
+  name: string
+  address: string
+  status: string
 }
 
-export default function CreateAdminUserPage() {
+const ROLE_CONFIG: Record<string, {
+  label: string
+  description: string
+  icon: React.ReactNode
+  color: string
+  app: string
+}> = {
+  admin: {
+    label: "Administrateur",
+    description: "Accès complet aux opérations : commandes, clients, chauffeurs, dépanneurs, zones, support, finances.",
+    icon: <Shield className="h-5 w-5" />,
+    color: "bg-blue-50 border-blue-200 text-blue-800",
+    app: "Panel Admin",
+  },
+  dispatcher: {
+    label: "Dispatcher",
+    description: "Gestion des commandes, assignation des chauffeurs, suivi dispatch et tracking en temps réel.",
+    icon: <Truck className="h-5 w-5" />,
+    color: "bg-orange-50 border-orange-200 text-orange-800",
+    app: "Panel Admin",
+  },
+  agent: {
+    label: "Agent Support",
+    description: "Support client, gestion des tickets et litiges, accès lecture aux commandes et clients.",
+    icon: <Headphones className="h-5 w-5" />,
+    color: "bg-yellow-50 border-yellow-200 text-yellow-800",
+    app: "Panel Admin",
+  },
+  store_owner: {
+    label: "Propriétaire Dépanneur",
+    description: "Accès à l'application store pour gérer son dépanneur : commandes, catalogue, horaires, paiements et notifications.",
+    icon: <Store className="h-5 w-5" />,
+    color: "bg-emerald-50 border-emerald-200 text-emerald-800",
+    app: "App Store (/store)",
+  },
+}
+
+function CreateUserForm() {
   const router = useRouter()
+  const searchParams = useSearchParams()
+  const defaultRole = searchParams.get("role") || ""
+
   const [form, setForm] = useState({
     firstName: "",
     lastName: "",
     email: "",
     phone: "",
-    role: "",
+    role: defaultRole,
+    storeId: "",
     password: "",
     confirmPassword: "",
   })
+  const [stores, setStores] = useState<StoreOption[]>([])
+  const [loadingStores, setLoadingStores] = useState(false)
   const [error, setError] = useState("")
   const [success, setSuccess] = useState("")
   const [loading, setLoading] = useState(false)
+
+  // Charger les dépanneurs si rôle store_owner
+  useEffect(() => {
+    if (form.role === "store_owner") {
+      setLoadingStores(true)
+      fetch("/api/admin/stores")
+        .then(r => r.json())
+        .then(data => {
+          setStores(data.stores || data.rows || [])
+        })
+        .catch(() => {})
+        .finally(() => setLoadingStores(false))
+    }
+  }, [form.role])
 
   const handleChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     setForm({ ...form, [e.target.id]: e.target.value })
@@ -59,6 +119,10 @@ export default function CreateAdminUserPage() {
       setError("Le mot de passe doit contenir au moins 8 caractères.")
       return
     }
+    if (form.role === "store_owner" && !form.storeId) {
+      setError("Veuillez sélectionner le dépanneur associé à ce propriétaire.")
+      return
+    }
 
     setLoading(true)
     try {
@@ -72,6 +136,7 @@ export default function CreateAdminUserPage() {
           lastName: form.lastName,
           phone: form.phone,
           role: form.role,
+          storeId: form.role === "store_owner" ? form.storeId : undefined,
         }),
       })
 
@@ -81,14 +146,17 @@ export default function CreateAdminUserPage() {
         return
       }
 
-      setSuccess(`Compte ${form.role} créé avec succès pour ${form.email}.`)
-      setTimeout(() => router.push("/admin/users"), 2000)
+      const roleLabel = ROLE_CONFIG[form.role]?.label || form.role
+      setSuccess(`Compte ${roleLabel} créé avec succès pour ${form.email}.`)
+      setTimeout(() => router.push("/admin/users"), 2500)
     } catch {
       setError("Erreur réseau. Veuillez réessayer.")
     } finally {
       setLoading(false)
     }
   }
+
+  const selectedRoleConfig = ROLE_CONFIG[form.role]
 
   return (
     <div className="max-w-2xl mx-auto space-y-6">
@@ -99,17 +167,41 @@ export default function CreateAdminUserPage() {
           </Link>
         </Button>
         <div>
-          <h1 className="text-2xl font-bold">Créer un compte équipe</h1>
+          <h1 className="text-2xl font-bold">Créer un compte</h1>
           <p className="text-muted-foreground">Réservé au Super Administrateur</p>
         </div>
+      </div>
+
+      {/* Sélection du rôle — cartes visuelles */}
+      <div className="grid grid-cols-2 gap-3">
+        {Object.entries(ROLE_CONFIG).map(([key, cfg]) => (
+          <button
+            key={key}
+            type="button"
+            onClick={() => { setForm({ ...form, role: key, storeId: "" }); setError("") }}
+            className={`text-left p-4 rounded-lg border-2 transition-all ${
+              form.role === key
+                ? "border-primary bg-primary/5 ring-2 ring-primary/20"
+                : "border-border hover:border-muted-foreground/40"
+            }`}
+          >
+            <div className="flex items-center gap-2 mb-1">
+              <span className={`p-1 rounded ${cfg.color}`}>{cfg.icon}</span>
+              <span className="font-semibold text-sm">{cfg.label}</span>
+            </div>
+            <p className="text-xs text-muted-foreground line-clamp-2">{cfg.description}</p>
+            <Badge variant="outline" className="mt-2 text-xs">{cfg.app}</Badge>
+          </button>
+        ))}
       </div>
 
       <Card>
         <CardHeader>
           <CardTitle>Informations du compte</CardTitle>
           <CardDescription>
-            Seuls les rôles <strong>Admin</strong>, <strong>Dispatcher</strong> et <strong>Agent</strong> peuvent être créés ici.
-            Les comptes Client et Chauffeur s'inscrivent via le site public.
+            {form.role === "store_owner"
+              ? "Le propriétaire du dépanneur se connectera via depxpres.vercel.app/store-login"
+              : "L'équipe admin se connecte via depxpres.vercel.app/admin/login"}
           </CardDescription>
         </CardHeader>
         <form onSubmit={handleSubmit}>
@@ -126,24 +218,43 @@ export default function CreateAdminUserPage() {
               </div>
             )}
 
-            <div className="space-y-2">
-              <Label htmlFor="role">Rôle <span className="text-red-500">*</span></Label>
-              <Select value={form.role} onValueChange={v => { setForm({ ...form, role: v }); setError("") }}>
-                <SelectTrigger>
-                  <SelectValue placeholder="Choisir un rôle" />
-                </SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="admin">Administrateur</SelectItem>
-                  <SelectItem value="dispatcher">Dispatcher</SelectItem>
-                  <SelectItem value="agent">Agent Support</SelectItem>
-                </SelectContent>
-              </Select>
-              {form.role && (
-                <p className="text-xs text-muted-foreground mt-1">
-                  {ROLE_DESCRIPTIONS[form.role]}
+            {/* Sélection du dépanneur (store_owner uniquement) */}
+            {form.role === "store_owner" && (
+              <div className="space-y-2 p-4 bg-emerald-50 border border-emerald-200 rounded-lg">
+                <Label htmlFor="storeId" className="text-emerald-800 font-semibold">
+                  Dépanneur associé <span className="text-red-500">*</span>
+                </Label>
+                <Select
+                  value={form.storeId}
+                  onValueChange={v => { setForm({ ...form, storeId: v }); setError("") }}
+                >
+                  <SelectTrigger className="bg-white">
+                    <SelectValue placeholder={loadingStores ? "Chargement..." : "Sélectionner un dépanneur"} />
+                  </SelectTrigger>
+                  <SelectContent>
+                    {stores.map(store => (
+                      <SelectItem key={store.id} value={store.id}>
+                        <div className="flex items-center gap-2">
+                          <span>{store.name}</span>
+                          <span className="text-xs text-muted-foreground">— {store.address || store.id}</span>
+                          {store.status === "active" && (
+                            <Badge className="bg-green-100 text-green-800 text-xs">Actif</Badge>
+                          )}
+                        </div>
+                      </SelectItem>
+                    ))}
+                    {stores.length === 0 && !loadingStores && (
+                      <SelectItem value="none" disabled>
+                        Aucun dépanneur disponible
+                      </SelectItem>
+                    )}
+                  </SelectContent>
+                </Select>
+                <p className="text-xs text-emerald-700">
+                  Ce propriétaire aura accès uniquement à ce dépanneur dans l&apos;app store.
                 </p>
-              )}
-            </div>
+              </div>
+            )}
 
             <div className="grid grid-cols-2 gap-4">
               <div className="space-y-2">
@@ -171,7 +282,7 @@ export default function CreateAdminUserPage() {
               <Input
                 id="email"
                 type="email"
-                placeholder="admin@depxpres.com"
+                placeholder={form.role === "store_owner" ? "proprietaire@depanneur.com" : "admin@depxpres.com"}
                 value={form.email}
                 onChange={handleChange}
                 required
@@ -213,8 +324,20 @@ export default function CreateAdminUserPage() {
               />
             </div>
 
+            {/* Résumé des permissions */}
+            {selectedRoleConfig && (
+              <div className={`p-4 rounded-lg border ${selectedRoleConfig.color}`}>
+                <div className="flex items-center gap-2 mb-1">
+                  {selectedRoleConfig.icon}
+                  <span className="font-semibold text-sm">{selectedRoleConfig.label}</span>
+                  <Badge variant="outline" className="text-xs">{selectedRoleConfig.app}</Badge>
+                </div>
+                <p className="text-xs mt-1">{selectedRoleConfig.description}</p>
+              </div>
+            )}
+
             <div className="flex gap-3 pt-2">
-              <Button type="submit" disabled={loading} className="flex-1">
+              <Button type="submit" disabled={loading || !form.role} className="flex-1">
                 {loading ? "Création en cours..." : "Créer le compte"}
               </Button>
               <Button type="button" variant="outline" asChild>
@@ -225,5 +348,13 @@ export default function CreateAdminUserPage() {
         </form>
       </Card>
     </div>
+  )
+}
+
+export default function CreateAdminUserPage() {
+  return (
+    <Suspense fallback={<div className="flex min-h-screen items-center justify-center">Chargement...</div>}>
+      <CreateUserForm />
+    </Suspense>
   )
 }

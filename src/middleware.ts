@@ -44,6 +44,9 @@ const PUBLIC_ROUTES = [
 // ── Rôles autorisés à accéder au dashboard admin ────────────────────────────
 const ADMIN_ROLES = ['super_admin', 'admin', 'dispatcher', 'agent'];
 
+// ── Rôles autorisés à accéder à l'app store ─────────────────────────────────
+const STORE_ROLES = ['store_owner', 'super_admin', 'admin'];
+
 // ── Chemins accessibles par rôle ────────────────────────────────────────────
 // Dispatcher : Dashboard, Commandes, Dispatch/Tracking, Chauffeurs
 const DISPATCHER_ALLOWED = [
@@ -193,6 +196,48 @@ export async function middleware(request: NextRequest) {
         }
         return NextResponse.redirect(new URL('/admin/dashboard', request.url));
       }
+    }
+  }
+
+  // 4. Protection des routes store (/store/* et /api/store/*)
+  const isStoreRoute =
+    pathname.startsWith('/store') || pathname.startsWith('/api/store');
+
+  if (isStoreRoute && pathname !== '/store-login') {
+    // Lire le cookie store_session (uid:role:storeId) ou admin_session
+    const storeSession = request.cookies.get('store_session')?.value;
+    const adminSession = request.cookies.get('admin_session')?.value;
+    const jwtToken     = request.cookies.get('admin_token')?.value;
+
+    let uid   = '';
+    let role  = '';
+
+    if (storeSession) {
+      const parts = storeSession.split(':');
+      uid  = parts[0] || '';
+      role = parts[1] || '';
+    } else if (adminSession) {
+      const parts = adminSession.split(':');
+      uid  = parts[0] || '';
+      role = parts[1] || '';
+    } else if (jwtToken) {
+      const claims = decodeJWTPayload(jwtToken);
+      if (claims) {
+        uid  = ((claims.user_id || claims.sub) as string) || '';
+        role = (claims.role as string) || '';
+      }
+    }
+
+    if (!uid || !STORE_ROLES.includes(role)) {
+      if (pathname.startsWith('/api/')) {
+        return NextResponse.json(
+          { ok: false, error: 'Non autorisé. Connexion store requise.' },
+          { status: 401 }
+        );
+      }
+      const loginUrl = new URL('/store-login', request.url);
+      loginUrl.searchParams.set('redirect', pathname);
+      return NextResponse.redirect(loginUrl);
     }
   }
 

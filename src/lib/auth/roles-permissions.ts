@@ -2,9 +2,9 @@
  * roles-permissions.ts
  * Définition des rôles et permissions DepXpreS
  *
- * Hiérarchie : super_admin > admin > dispatcher > agent > client / driver
+ * Hiérarchie : super_admin > admin > dispatcher > agent > store_owner > client / driver
  *
- * Tableau des accès dashboard :
+ * Tableau des accès dashboard admin :
  * ┌─────────────────────┬─────────────┬───────┬────────────┬───────┐
  * │ Page                │ Super Admin │ Admin │ Dispatcher │ Agent │
  * ├─────────────────────┼─────────────┼───────┼────────────┼───────┤
@@ -20,9 +20,24 @@
  * │ Paramètres système  │ ✅          │ ❌    │ ❌         │ ❌    │
  * │ Créer comptes équipe│ ✅          │ ❌    │ ❌         │ ❌    │
  * └─────────────────────┴─────────────┴───────┴────────────┴───────┘
+ *
+ * Tableau des accès app store (store_owner) :
+ * ┌──────────────────────────┬─────────────┐
+ * │ Page Store App           │ Store Owner │
+ * ├──────────────────────────┼─────────────┤
+ * │ Dashboard store          │ ✅          │
+ * │ Commandes du dépanneur   │ ✅          │
+ * │ Catalogue / Produits     │ ✅          │
+ * │ Horaires                 │ ✅          │
+ * │ Paiements / Règlements   │ ✅ (lecture)│
+ * │ Notifications            │ ✅          │
+ * │ Profil dépanneur         │ ✅          │
+ * │ Dashboard admin          │ ❌          │
+ * │ Tous les dépanneurs      │ ❌          │
+ * └──────────────────────────┴─────────────┘
  */
 
-export type RoleKey = 'super_admin' | 'admin' | 'dispatcher' | 'agent' | 'client' | 'driver';
+export type RoleKey = 'super_admin' | 'admin' | 'dispatcher' | 'agent' | 'store_owner' | 'client' | 'driver';
 
 export type PermissionKey =
   | '*'
@@ -39,6 +54,8 @@ export type PermissionKey =
   | 'clients.read' | 'clients.write'
   // Stores
   | 'stores.read' | 'stores.write'
+  // Store Owner — accès limité à son propre dépanneur
+  | 'store.dashboard' | 'store.orders' | 'store.catalog' | 'store.schedule' | 'store.profile'
   // Promotions
   | 'promotions.read' | 'promotions.write'
   // Zones
@@ -63,15 +80,68 @@ export interface RoleDefinition {
   role_key: RoleKey;
   label: string;
   is_system: boolean;
+  app: 'admin' | 'store' | 'client' | 'driver' | 'all';
+  description: string;
+  color: string;
 }
 
 export const ROLES: Record<RoleKey, RoleDefinition> = {
-  super_admin: { role_key: 'super_admin', label: 'Super Admin',  is_system: true },
-  admin:       { role_key: 'admin',       label: 'Admin',        is_system: true },
-  dispatcher:  { role_key: 'dispatcher',  label: 'Dispatcher',   is_system: true },
-  agent:       { role_key: 'agent',       label: 'Agent Support', is_system: true },
-  client:      { role_key: 'client',      label: 'Client',       is_system: true },
-  driver:      { role_key: 'driver',      label: 'Chauffeur',    is_system: true },
+  super_admin: {
+    role_key: 'super_admin',
+    label: 'Super Admin',
+    is_system: true,
+    app: 'admin',
+    description: 'Accès complet à toutes les fonctionnalités du système',
+    color: 'bg-purple-100 text-purple-800',
+  },
+  admin: {
+    role_key: 'admin',
+    label: 'Administrateur',
+    is_system: true,
+    app: 'admin',
+    description: 'Accès complet sauf paramètres système et création de comptes',
+    color: 'bg-blue-100 text-blue-800',
+  },
+  dispatcher: {
+    role_key: 'dispatcher',
+    label: 'Dispatcher',
+    is_system: true,
+    app: 'admin',
+    description: 'Gestion des commandes, dispatch et chauffeurs',
+    color: 'bg-orange-100 text-orange-800',
+  },
+  agent: {
+    role_key: 'agent',
+    label: 'Agent Support',
+    is_system: true,
+    app: 'admin',
+    description: 'Support client et gestion des tickets',
+    color: 'bg-yellow-100 text-yellow-800',
+  },
+  store_owner: {
+    role_key: 'store_owner',
+    label: 'Propriétaire Dépanneur',
+    is_system: true,
+    app: 'store',
+    description: 'Accès à l\'app store pour gérer son dépanneur (commandes, catalogue, horaires)',
+    color: 'bg-emerald-100 text-emerald-800',
+  },
+  client: {
+    role_key: 'client',
+    label: 'Client',
+    is_system: true,
+    app: 'client',
+    description: 'Commander et suivre ses livraisons',
+    color: 'bg-green-100 text-green-800',
+  },
+  driver: {
+    role_key: 'driver',
+    label: 'Chauffeur',
+    is_system: true,
+    app: 'driver',
+    description: 'Accepter et livrer des commandes',
+    color: 'bg-cyan-100 text-cyan-800',
+  },
 };
 
 export const ROLE_PERMISSIONS: Record<RoleKey, PermissionKey[]> = {
@@ -118,6 +188,18 @@ export const ROLE_PERMISSIONS: Record<RoleKey, PermissionKey[]> = {
     'notifications.read', 'notifications.write',
   ],
 
+  // ── Store Owner : accès limité à l'app store de son propre dépanneur
+  store_owner: [
+    'store.dashboard',
+    'store.orders',
+    'store.catalog',
+    'store.schedule',
+    'store.profile',
+    'store_settlements.read',
+    'notifications.read', 'notifications.write',
+    'profile.read', 'profile.write',
+  ],
+
   // ── Client : commander, suivre sa livraison, profil personnel
   client: [
     'orders.read', 'orders.create',
@@ -151,7 +233,9 @@ export function getPermissionsForRole(role: RoleKey): PermissionKey[] {
 }
 
 export const ADMIN_ROLES: RoleKey[] = ['super_admin', 'admin', 'dispatcher', 'agent'];
+export const STORE_ROLES: RoleKey[] = ['store_owner'];
 export const PUBLIC_ROLES: RoleKey[] = ['client', 'driver'];
+export const ALL_ROLES: RoleKey[] = ['super_admin', 'admin', 'dispatcher', 'agent', 'store_owner', 'client', 'driver'];
 
 // Pages accessibles par rôle (utilisé par le middleware et la sidebar admin)
 export const ROLE_ALLOWED_PATHS: Record<string, RoleKey[]> = {
@@ -169,4 +253,6 @@ export const ROLE_ALLOWED_PATHS: Record<string, RoleKey[]> = {
   '/admin/settings':     ['super_admin'],
   '/admin/users':        ['super_admin'],
   '/admin/users/create': ['super_admin'],
+  // Store app — accessible uniquement aux store_owners et super_admin
+  '/store':              ['store_owner', 'super_admin', 'admin'],
 };

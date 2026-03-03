@@ -73,7 +73,8 @@ type CreateAdminBody = {
   firstName: string;
   lastName: string;
   phone?: string;
-  role: 'admin' | 'dispatcher' | 'agent';
+  role: 'admin' | 'dispatcher' | 'agent' | 'store_owner';
+  storeId?: string;
 };
 
 export async function POST(req: NextRequest) {
@@ -98,9 +99,18 @@ export async function POST(req: NextRequest) {
       );
     }
 
-    if (!['admin', 'dispatcher', 'agent'].includes(role)) {
+    if (!['admin', 'dispatcher', 'agent', 'store_owner'].includes(role)) {
       return NextResponse.json(
         { ok: false, error: 'INVALID_ROLE' },
+        { status: 400 }
+      );
+    }
+
+    // store_owner requiert un storeId
+    const storeId = (body as { storeId?: string }).storeId?.trim() || null;
+    if (role === 'store_owner' && !storeId) {
+      return NextResponse.json(
+        { ok: false, error: 'STORE_ID_REQUIRED' },
         { status: 400 }
       );
     }
@@ -155,6 +165,7 @@ export async function POST(req: NextRequest) {
       status: 'active',
       is_email_verified: false,
       is_phone_verified: false,
+      ...(storeId ? { store_id: storeId } : {}),
       created_by: authUser.uid,
       created_at: now,
       updated_at: now,
