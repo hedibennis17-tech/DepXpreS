@@ -1,11 +1,28 @@
 /**
  * middleware.ts — Protection des routes DepXpreS
- * Vérification du cookie admin_session (uid:role) ou admin_token (Firebase JWT)
- * Restrictions par rôle : super_admin > admin > dispatcher > agent
+ *
+ * Hiérarchie : super_admin > admin > dispatcher > agent > client / driver
+ *
+ * Tableau des accès dashboard :
+ * ┌─────────────────────┬─────────────┬───────┬────────────┬───────┐
+ * │ Page                │ Super Admin │ Admin │ Dispatcher │ Agent │
+ * ├─────────────────────┼─────────────┼───────┼────────────┼───────┤
+ * │ Dashboard           │ ✅          │ ✅    │ ✅         │ ✅    │
+ * │ Commandes           │ ✅          │ ✅    │ ✅         │ ❌    │
+ * │ Dispatch/Tracking   │ ✅          │ ✅    │ ✅         │ ❌    │
+ * │ Chauffeurs          │ ✅          │ ✅    │ ✅         │ ❌    │
+ * │ Support/Tickets     │ ✅          │ ✅    │ ❌         │ ✅    │
+ * │ Clients             │ ✅          │ ✅    │ ❌         │ ❌    │
+ * │ Stores              │ ✅          │ ✅    │ ❌         │ ❌    │
+ * │ Promotions          │ ✅          │ ✅    │ ❌         │ ❌    │
+ * │ Zones               │ ✅          │ ✅    │ ❌         │ ❌    │
+ * │ Paramètres système  │ ✅          │ ❌    │ ❌         │ ❌    │
+ * │ Créer comptes équipe│ ✅          │ ❌    │ ❌         │ ❌    │
+ * └─────────────────────┴─────────────┴───────┴────────────┴───────┘
  */
 import { NextRequest, NextResponse } from 'next/server';
 
-// Routes publiques — aucune vérification requise
+// ── Routes publiques — aucune vérification requise ──────────────────────────
 const PUBLIC_ROUTES = [
   '/',
   '/auth/login',
@@ -23,23 +40,24 @@ const PUBLIC_ROUTES = [
   '/api/admin/test',
 ];
 
-// Rôles autorisés à accéder au dashboard admin
+// ── Rôles autorisés à accéder au dashboard admin ────────────────────────────
 const ADMIN_ROLES = ['super_admin', 'admin', 'dispatcher', 'agent'];
 
-// Chemins accessibles par le dispatcher
+// ── Chemins accessibles par rôle ────────────────────────────────────────────
+// Dispatcher : Dashboard, Commandes, Dispatch/Tracking, Chauffeurs
 const DISPATCHER_ALLOWED = [
   '/admin/dashboard',
   '/admin/orders',
-  '/admin/drivers',
   '/admin/dispatch',
   '/admin/tracking',
+  '/admin/drivers',
   '/api/admin/orders',
-  '/api/admin/drivers',
   '/api/admin/dispatch',
   '/api/admin/tracking',
+  '/api/admin/drivers',
 ];
 
-// Chemins accessibles par l'agent support
+// Agent Support : Dashboard, Support/Tickets uniquement
 const AGENT_ALLOWED = [
   '/admin/dashboard',
   '/admin/support',
@@ -48,15 +66,20 @@ const AGENT_ALLOWED = [
   '/api/admin/tickets',
 ];
 
-// Décoder un JWT Firebase sans vérification de signature (Edge Runtime compatible)
+// Super Admin uniquement : Paramètres système + Créer comptes équipe
+const SUPER_ADMIN_ONLY = [
+  '/admin/settings',
+  '/admin/users/create',
+  '/api/admin/settings',
+];
+
+// ── Décoder un JWT Firebase sans vérification de signature (Edge Runtime) ───
 function decodeJWTPayload(token: string): Record<string, unknown> | null {
   try {
     const parts = token.split('.');
     if (parts.length !== 3) return null;
     const payload = parts[1];
-    // Ajouter le padding base64
     const padded = payload + '='.repeat((4 - payload.length % 4) % 4);
-    // Décoder base64url → base64 → string
     const base64 = padded.replace(/-/g, '+').replace(/_/g, '/');
     const decoded = atob(base64);
     return JSON.parse(decoded);
@@ -65,10 +88,11 @@ function decodeJWTPayload(token: string): Record<string, unknown> | null {
   }
 }
 
+// ── Middleware principal ─────────────────────────────────────────────────────
 export async function middleware(request: NextRequest) {
   const { pathname } = request.nextUrl;
 
-  // 1. Laisser passer les assets statiques et Next.js internals
+  // 1. Assets statiques et Next.js internals
   if (
     pathname.startsWith('/_next') ||
     pathname.startsWith('/favicon') ||
@@ -79,7 +103,7 @@ export async function middleware(request: NextRequest) {
     return NextResponse.next();
   }
 
-  // 2. Laisser passer les routes publiques
+  // 2. Routes publiques
   if (PUBLIC_ROUTES.some(route => pathname === route || pathname.startsWith(route + '/'))) {
     return NextResponse.next();
   }
@@ -89,31 +113,24 @@ export async function middleware(request: NextRequest) {
     pathname.startsWith('/admin') || pathname.startsWith('/api/admin');
 
   if (isAdminRoute) {
-    // Essayer d'abord le cookie admin_session (uid:role)
+    // Lire le cookie admin_session (uid:role) ou admin_token (Firebase JWT)
     const sessionToken = request.cookies.get('admin_session')?.value;
-    // Ensuite essayer le cookie admin_token (Firebase JWT complet)
-    const jwtToken = request.cookies.get('admin_token')?.value;
+    const jwtToken     = request.cookies.get('admin_token')?.value;
 
-    let uid = '';
+    let uid  = '';
     let role = '';
 
     if (sessionToken) {
-      // Format: "uid:role"
-      try {
-        const parts = sessionToken.split(':');
-        uid = parts[0] || '';
-        role = parts[1] || '';
-      } catch {
-        // Session corrompue
-      }
+      // Format : "uid:role"
+      const parts = sessionToken.split(':');
+      uid  = parts[0] || '';
+      role = parts[1] || '';
     } else if (jwtToken) {
-      // Décoder le JWT Firebase directement
       const claims = decodeJWTPayload(jwtToken);
       if (claims) {
-        // Vérifier l'expiration
         const exp = claims.exp as number;
         if (!exp || Date.now() / 1000 <= exp) {
-          uid = (claims.user_id || claims.sub) as string || '';
+          uid  = ((claims.user_id || claims.sub) as string) || '';
           role = (claims.role as string) || '';
         }
       }
@@ -132,11 +149,10 @@ export async function middleware(request: NextRequest) {
       return NextResponse.redirect(loginUrl);
     }
 
-    // Restrictions super_admin : seul lui peut créer des comptes équipe
-    if (
-      (pathname === '/admin/users/create' || pathname.startsWith('/admin/users/create')) &&
-      role !== 'super_admin'
-    ) {
+    // ── Restrictions Super Admin uniquement ──────────────────────────────
+    // Paramètres système et création de comptes équipe
+    const isSuperAdminOnly = SUPER_ADMIN_ONLY.some(p => pathname.startsWith(p));
+    if (isSuperAdminOnly && role !== 'super_admin') {
       if (pathname.startsWith('/api/')) {
         return NextResponse.json(
           { ok: false, error: 'Réservé au Super Admin.' },
@@ -146,13 +162,15 @@ export async function middleware(request: NextRequest) {
       return NextResponse.redirect(new URL('/admin/dashboard', request.url));
     }
 
-    // Restrictions dispatcher
+    // ── Restrictions Dispatcher ──────────────────────────────────────────
+    // Accès : Dashboard, Commandes, Dispatch/Tracking, Chauffeurs
+    // Interdit : Support, Clients, Stores, Promotions, Zones, Settings, Users
     if (role === 'dispatcher') {
       const allowed = DISPATCHER_ALLOWED.some(p => pathname.startsWith(p));
       if (!allowed) {
         if (pathname.startsWith('/api/')) {
           return NextResponse.json(
-            { ok: false, error: 'Accès refusé pour le rôle dispatcher.' },
+            { ok: false, error: 'Accès refusé pour le rôle Dispatcher.' },
             { status: 403 }
           );
         }
@@ -160,13 +178,15 @@ export async function middleware(request: NextRequest) {
       }
     }
 
-    // Restrictions agent
+    // ── Restrictions Agent Support ───────────────────────────────────────
+    // Accès : Dashboard, Support/Tickets uniquement
+    // Interdit : Commandes, Dispatch, Chauffeurs, Clients, Stores, etc.
     if (role === 'agent') {
       const allowed = AGENT_ALLOWED.some(p => pathname.startsWith(p));
       if (!allowed) {
         if (pathname.startsWith('/api/')) {
           return NextResponse.json(
-            { ok: false, error: 'Accès refusé pour le rôle agent.' },
+            { ok: false, error: 'Accès refusé pour le rôle Agent Support.' },
             { status: 403 }
           );
         }

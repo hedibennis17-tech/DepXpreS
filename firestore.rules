@@ -1,0 +1,330 @@
+rules_version = '2';
+
+service cloud.firestore {
+  match /databases/{database}/documents {
+
+    // ====================================================================
+    // Fonctions utilitaires — basées sur les JWT custom claims Firebase
+    // ====================================================================
+
+    function isSignedIn() {
+      return request.auth != null;
+    }
+
+    function userRole() {
+      return request.auth.token.get('role', '');
+    }
+
+    function isSuperAdmin() {
+      return isSignedIn() && userRole() == 'super_admin';
+    }
+
+    // Admin = admin OU super_admin (héritage)
+    function isAdmin() {
+      return isSignedIn() && userRole() in ['admin', 'super_admin'];
+    }
+
+    // Dispatcher = dispatcher OU admin OU super_admin (héritage)
+    function isDispatcher() {
+      return isSignedIn() && userRole() in ['dispatcher', 'admin', 'super_admin'];
+    }
+
+    // Agent = agent OU admin OU super_admin (héritage)
+    function isAgent() {
+      return isSignedIn() && userRole() in ['agent', 'admin', 'super_admin'];
+    }
+
+    // Membre de l'équipe = tout rôle admin
+    function isTeamMember() {
+      return isSignedIn() && userRole() in ['super_admin', 'admin', 'dispatcher', 'agent'];
+    }
+
+    function isClient() {
+      return isSignedIn() && userRole() == 'client';
+    }
+
+    function isDriver() {
+      return isSignedIn() && userRole() == 'driver';
+    }
+
+    function isOwner(uid) {
+      return isSignedIn() && request.auth.uid == uid;
+    }
+
+    // ====================================================================
+    // app_users — table centrale des utilisateurs
+    // ====================================================================
+    match /app_users/{userId} {
+      allow read:   if isTeamMember() || isOwner(userId);
+      allow create: if false;
+      allow update: if isAdmin() || isOwner(userId);
+      allow delete: if isSuperAdmin();
+    }
+
+    // ====================================================================
+    // admin_profiles — profils équipe (admin / dispatcher / agent)
+    // ====================================================================
+    match /admin_profiles/{userId} {
+      allow read:  if isTeamMember();
+      allow write: if isAdmin();
+    }
+
+    // ====================================================================
+    // client_profiles — profils clients
+    // Accessible : Admin+, Agent (lecture), Client (son propre profil)
+    // ====================================================================
+    match /client_profiles/{userId} {
+      allow read:  if isAdmin() || isAgent() || isOwner(userId);
+      allow write: if isAdmin() || isOwner(userId);
+    }
+
+    // ====================================================================
+    // driver_profiles — profils chauffeurs
+    // Accessible : Admin+, Dispatcher (lecture), Chauffeur (son propre profil)
+    // ====================================================================
+    match /driver_profiles/{userId} {
+      allow read:  if isAdmin() || isDispatcher() || isOwner(userId);
+      allow write: if isAdmin() || isOwner(userId);
+    }
+
+    // ====================================================================
+    // driver_applications — dossiers de candidature chauffeur
+    // ====================================================================
+    match /driver_applications/{userId} {
+      allow read:  if isAdmin() || isDispatcher() || isOwner(userId);
+      allow write: if isAdmin() || isOwner(userId);
+    }
+
+    // ====================================================================
+    // orders — commandes
+    // Commandes (toutes) : Super Admin ✅ Admin ✅ Dispatcher ✅ Agent ❌
+    // ====================================================================
+    match /orders/{orderId} {
+      allow read: if isDispatcher()
+        || (isClient() && resource.data.clientId == request.auth.uid)
+        || (isDriver() && resource.data.driverId == request.auth.uid);
+      allow create: if isClient();
+      allow update: if isDispatcher()
+        || (isDriver() && resource.data.driverId == request.auth.uid);
+      allow delete: if false;
+    }
+
+    match /order_status_history/{docId} {
+      allow read: if isDispatcher()
+        || (isClient() && resource.data.clientId == request.auth.uid)
+        || (isDriver() && resource.data.driverId == request.auth.uid);
+      allow write: if false;
+    }
+
+    // ====================================================================
+    // stores — dépanneurs
+    // Stores : Super Admin ✅ Admin ✅ Dispatcher ❌ Agent ❌
+    // ====================================================================
+    match /stores/{storeId} {
+      allow read:  if isAdmin() || isClient() || isDriver();
+      allow write: if isAdmin();
+    }
+
+    // ====================================================================
+    // products / categories / subcategories
+    // Gérés par Admin uniquement
+    // ====================================================================
+    match /products/{productId} {
+      allow read:  if isSignedIn();
+      allow write: if isAdmin();
+    }
+
+    match /categories/{catId} {
+      allow read:  if isSignedIn();
+      allow write: if isAdmin();
+    }
+
+    match /subcategories/{subId} {
+      allow read:  if isSignedIn();
+      allow write: if isAdmin();
+    }
+
+    // ====================================================================
+    // zones — zones de livraison
+    // Zones : Super Admin ✅ Admin ✅ Dispatcher ❌ Agent ❌
+    // ====================================================================
+    match /zones/{zoneId} {
+      allow read:  if isAdmin();
+      allow write: if isAdmin();
+    }
+
+    // ====================================================================
+    // dispatch_queue / dispatch_events
+    // Dispatch / Tracking : Super Admin ✅ Admin ✅ Dispatcher ✅ Agent ❌
+    // ====================================================================
+    match /dispatch_queue/{docId} {
+      allow read:  if isDispatcher() || isDriver();
+      allow write: if isDispatcher();
+    }
+
+    match /dispatch_events/{docId} {
+      allow read:  if isDispatcher();
+      allow write: if false;
+    }
+
+    // ====================================================================
+    // notifications
+    // ====================================================================
+    match /notifications/{notifId} {
+      allow read: if isTeamMember()
+        || (isSignedIn() && resource.data.recipient_id == request.auth.uid);
+      allow write: if false;
+    }
+
+    match /store_notifications/{notifId} {
+      allow read:  if isAdmin() || isDispatcher();
+      allow write: if false;
+    }
+
+    // ====================================================================
+    // support_tickets — Support / Tickets
+    // Support / Tickets : Super Admin ✅ Admin ✅ Dispatcher ❌ Agent ✅
+    // ====================================================================
+    match /support_tickets/{ticketId} {
+      allow read: if isAgent()
+        || (isSignedIn() && resource.data.created_by == request.auth.uid);
+      allow write: if isAgent()
+        || (isSignedIn() && resource.data.created_by == request.auth.uid);
+
+      match /messages/{msgId} {
+        allow read: if isAgent()
+          || (isSignedIn() &&
+              get(/databases/$(database)/documents/support_tickets/$(ticketId)).data.created_by == request.auth.uid);
+        allow write: if isAgent()
+          || (isSignedIn() &&
+              get(/databases/$(database)/documents/support_tickets/$(ticketId)).data.created_by == request.auth.uid);
+      }
+    }
+
+    // ====================================================================
+    // chat_threads
+    // ====================================================================
+    match /chat_threads/{threadId} {
+      allow read, write: if isSignedIn()
+        && request.auth.uid in resource.data.participants;
+
+      match /messages/{msgId} {
+        allow read, write: if isSignedIn()
+          && request.auth.uid in
+             get(/databases/$(database)/documents/chat_threads/$(threadId)).data.participants;
+      }
+    }
+
+    // ====================================================================
+    // wallets
+    // ====================================================================
+    match /wallets/{walletId} {
+      allow read: if isAdmin()
+        || (isSignedIn() && resource.data.user_id == request.auth.uid);
+      allow write: if false;
+    }
+
+    // ====================================================================
+    // transactions / payments / refunds / payouts
+    // ====================================================================
+    match /transactions/{txId} {
+      allow read: if isAdmin()
+        || (isSignedIn() && resource.data.user_id == request.auth.uid);
+      allow write: if false;
+    }
+
+    match /payments/{payId} {
+      allow read: if isAdmin()
+        || (isSignedIn() && resource.data.user_id == request.auth.uid);
+      allow write: if false;
+    }
+
+    match /refunds/{refundId} {
+      allow read:  if isAdmin();
+      allow write: if false;
+    }
+
+    match /payouts/{payoutId} {
+      allow read: if isAdmin()
+        || (isDriver() && resource.data.driver_id == request.auth.uid);
+      allow write: if false;
+    }
+
+    // ====================================================================
+    // store_settlements / store_payout_transactions / store_settlement_events
+    // ====================================================================
+    match /store_settlements/{settlementId} {
+      allow read:  if isDispatcher();
+      allow write: if false;
+    }
+
+    match /store_payout_transactions/{docId} {
+      allow read:  if isDispatcher();
+      allow write: if false;
+    }
+
+    match /store_settlement_events/{docId} {
+      allow read:  if isDispatcher();
+      allow write: if false;
+    }
+
+    // ====================================================================
+    // promotions
+    // Promotions : Super Admin ✅ Admin ✅ Dispatcher ❌ Agent ❌
+    // ====================================================================
+    match /promotions/{promoId} {
+      allow read:  if isAdmin() || isClient();
+      allow write: if isAdmin();
+    }
+
+    // ====================================================================
+    // reviews
+    // ====================================================================
+    match /reviews/{reviewId} {
+      allow read: if isSignedIn();
+      allow create: if isClient();
+      allow update, delete: if isAdmin()
+        || (isSignedIn() && resource.data.author_id == request.auth.uid);
+    }
+
+    // ====================================================================
+    // addresses
+    // ====================================================================
+    match /addresses/{addressId} {
+      allow read, write: if isAdmin()
+        || (isSignedIn() && resource.data.user_id == request.auth.uid);
+    }
+
+    // ====================================================================
+    // reports
+    // ====================================================================
+    match /reports/{reportId} {
+      allow read:  if isAdmin();
+      allow write: if false;
+    }
+
+    // ====================================================================
+    // audit_logs — journaux d'audit
+    // ====================================================================
+    match /audit_logs/{logId} {
+      allow read:  if isSuperAdmin();
+      allow write: if false;
+    }
+
+    // ====================================================================
+    // system_settings — Paramètres système
+    // Paramètres système : Super Admin ✅ Admin ❌ Dispatcher ❌ Agent ❌
+    // ====================================================================
+    match /system_settings/{settingId} {
+      allow read:  if isTeamMember();
+      allow write: if isSuperAdmin();
+    }
+
+    // ====================================================================
+    // Règle par défaut — tout refuser
+    // ====================================================================
+    match /{document=**} {
+      allow read, write: if false;
+    }
+  }
+}
