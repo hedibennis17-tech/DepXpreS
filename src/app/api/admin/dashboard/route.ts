@@ -136,6 +136,12 @@ export async function GET(_req: NextRequest) {
       weeklyChart,
       recentOrders,
       activeOrdersList,
+      onlineDriversList: drivers
+        .filter(d => d.isOnline === true)
+        .map(d => ({
+          id: d.id,
+          full_name: (d.displayName as string) || (d.name as string) || "Chauffeur",
+        })),
       topDrivers,
     });
 
