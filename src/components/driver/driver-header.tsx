@@ -1,11 +1,14 @@
+"use client";
+
 import Link from 'next/link';
 import { Button } from '@/components/ui/button';
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuLabel, DropdownMenuSeparator, DropdownMenuTrigger } from '@/components/ui/dropdown-menu';
-import { LogOut, Settings, Wallet, BarChart } from 'lucide-react';
+import { LogOut, Settings, Wallet, BarChart, Trash2 } from 'lucide-react';
 import { Logo } from '../logo';
 import { Switch } from '../ui/switch';
 import { Label } from '../ui/label';
+import { clearCacheAndReload } from "@/lib/clear-cache";
 
 export function DriverHeader() {
   const isLoggedIn = true; // Mock login state
@@ -53,6 +56,10 @@ export function DriverHeader() {
                   <span>Paramètres</span>
                 </DropdownMenuItem>
                 <DropdownMenuSeparator />
+                <DropdownMenuItem onClick={() => clearCacheAndReload()}>
+                  <Trash2 className="mr-2 h-4 w-4" />
+                  <span>Vider le cache</span>
+                </DropdownMenuItem>
                 <DropdownMenuItem>
                   <LogOut className="mr-2 h-4 w-4" />
                   <span>Déconnexion</span>

@@ -1,10 +1,13 @@
+"use client";
+
 import Link from 'next/link';
 import { Button } from '@/components/ui/button';
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuLabel, DropdownMenuSeparator, DropdownMenuTrigger } from '@/components/ui/dropdown-menu';
 import { Sheet, SheetContent, SheetTrigger } from '@/components/ui/sheet';
-import { Menu, User, Briefcase, Wallet, LogOut, Globe } from 'lucide-react';
+import { Menu, User, Briefcase, Wallet, LogOut, Globe, Trash2 } from 'lucide-react';
 import { Logo } from '../logo';
+import { clearCacheAndReload } from "@/lib/clear-cache";
 
 const navLinks = [
   { href: '/client', label: 'Commander' },
@@ -98,6 +101,10 @@ export function ClientHeader() {
                     <span>Portefeuille</span>
                   </DropdownMenuItem>
                   <DropdownMenuSeparator />
+                  <DropdownMenuItem onClick={() => clearCacheAndReload()}>
+                    <Trash2 className="mr-2 h-4 w-4" />
+                    <span>Vider le cache</span>
+                  </DropdownMenuItem>
                   <DropdownMenuItem>
                     <LogOut className="mr-2 h-4 w-4" />
                     <span>Déconnexion</span>

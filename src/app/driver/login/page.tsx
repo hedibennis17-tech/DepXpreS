@@ -16,6 +16,7 @@ import Link from "next/link"
 import { useRouter } from "next/navigation"
 import { signInWithEmailAndPassword } from "firebase/auth"
 import { auth } from "@/lib/firebase"
+import { clearCacheAndReload } from "@/lib/clear-cache"
 
 export default function DriverLoginPage() {
   const router = useRouter()
@@ -23,6 +24,13 @@ export default function DriverLoginPage() {
   const [password, setPassword] = useState("")
   const [error, setError] = useState("")
   const [loading, setLoading] = useState(false)
+  const [isRateLimited, setIsRateLimited] = useState(false)
+  const [isClearing, setIsClearing] = useState(false)
+
+  const handleClearCache = async () => {
+    setIsClearing(true)
+    await clearCacheAndReload()
+  }
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault()
@@ -64,6 +72,7 @@ export default function DriverLoginPage() {
         setError("Email ou mot de passe incorrect.")
       } else if (err.code === "auth/too-many-requests") {
         setError("Trop de tentatives. Veuillez réessayer dans quelques minutes.")
+        setIsRateLimited(true)
       } else {
         setError("Erreur de connexion. Veuillez réessayer.")
       }
@@ -84,7 +93,17 @@ export default function DriverLoginPage() {
         <CardContent className="space-y-4">
           {error && (
             <div className="rounded-md bg-red-50 border border-red-200 px-4 py-3 text-sm text-red-700">
-              {error}
+              <p>{error}</p>
+              {isRateLimited && (
+                <button
+                  type="button"
+                  onClick={handleClearCache}
+                  disabled={isClearing}
+                  className="mt-2 text-xs underline hover:no-underline text-red-800"
+                >
+                  {isClearing ? "Nettoyage en cours..." : "Vider le cache et réessayer"}
+                </button>
+              )}
             </div>
           )}
           <div className="space-y-2">

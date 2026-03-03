@@ -39,7 +39,9 @@ import {
   LogOut,
   ChevronRight,
   Search,
+  Trash2,
 } from "lucide-react";
+import { clearCacheAndReload } from "@/lib/clear-cache";
 import { Logo } from "../logo";
 import { Avatar, AvatarFallback, AvatarImage } from "../ui/avatar";
 import { usePathname } from "next/navigation";
@@ -353,6 +355,15 @@ export function AdminSidebar() {
             <p className="text-sm font-semibold text-sidebar-foreground">Hedi Bennis</p>
             <p className="text-xs text-sidebar-foreground/70">Super Admin</p>
           </div>
+          <Button
+            variant="ghost"
+            size="icon"
+            className="group-data-[collapsible=icon]:hidden"
+            onClick={() => clearCacheAndReload()}
+            title="Vider le cache"
+          >
+            <Trash2 className="h-4 w-4" />
+          </Button>
           <Button
             variant="default"
             size="icon"
