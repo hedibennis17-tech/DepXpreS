@@ -1,6 +1,9 @@
 
 "use client";
 
+import { useRouter } from "next/navigation";
+import { signOut } from "firebase/auth";
+import { auth } from "@/lib/firebase";
 import {
   Sidebar,
   SidebarHeader,
@@ -299,6 +302,17 @@ const SidebarCollapsibleItem = ({
 
 export function AdminSidebar() {
   const pathname = usePathname();
+  const router = useRouter();
+
+  const handleLogout = async () => {
+    try {
+      await signOut(auth);
+    } catch {}
+    // Supprimer les cookies de session
+    document.cookie = 'admin_session=;expires=Thu, 01 Jan 1970 00:00:00 GMT;path=/';
+    document.cookie = 'admin_token=;expires=Thu, 01 Jan 1970 00:00:00 GMT;path=/';
+    router.push('/admin/login');
+  };
 
   return (
     <Sidebar variant="sidebar" collapsible="icon">
@@ -339,7 +353,13 @@ export function AdminSidebar() {
             <p className="text-sm font-semibold text-sidebar-foreground">Hedi Bennis</p>
             <p className="text-xs text-sidebar-foreground/70">Super Admin</p>
           </div>
-          <Button variant="default" size="icon" className="group-data-[collapsible=icon]:hidden">
+          <Button
+            variant="default"
+            size="icon"
+            className="group-data-[collapsible=icon]:hidden"
+            onClick={handleLogout}
+            title="Se déconnecter"
+          >
             <LogOut className="h-4 w-4" />
           </Button>
         </div>
