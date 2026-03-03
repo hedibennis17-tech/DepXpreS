@@ -9,7 +9,7 @@ export default function Page() {
 
   useEffect(() => {
     if (!driverId) return;
-    fetch(`/api/admin/drivers/${{driverId}}`)
+    fetch(`/api/admin/drivers/${driverId}`)
       .then(r => r.json())
       .then(d => setData(d.driver || d.driver || d))
       .finally(() => setLoading(false));

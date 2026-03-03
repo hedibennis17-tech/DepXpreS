@@ -9,7 +9,7 @@ export default function Page() {
 
   useEffect(() => {
     if (!storeId) return;
-    fetch(`/api/admin/stores/${{storeId}}/performance`)
+    fetch(`/api/admin/stores/${storeId}/performance`)
       .then(r => r.json())
       .then(d => setData(d.performance || d.store || d))
       .finally(() => setLoading(false));

@@ -1,52 +1,103 @@
-'use client';
-import { useState, useEffect } from 'react';
+"use client";
+import { useState } from "react";
+import { Send, Users, Store, Car, RefreshCw, Check } from "lucide-react";
 
-export default function Page() {
-  const [data, setData] = useState<any>(null);
-  const [loading, setLoading] = useState(true);
+const AUDIENCES = [
+  { value: "all", label: "Tous les utilisateurs", icon: Users },
+  { value: "clients", label: "Clients uniquement", icon: Users },
+  { value: "drivers", label: "Chauffeurs uniquement", icon: Car },
+  { value: "stores", label: "Dépanneurs uniquement", icon: Store },
+];
 
-  useEffect(() => {
-    fetch('/api/admin/notifications').then(r => r.json()).then(d => setData(d)).finally(() => setLoading(false));
-  }, []);
+export default function NotificationsComposePage() {
+  const [audience, setAudience] = useState("all");
+  const [title, setTitle] = useState("");
+  const [body, setBody] = useState("");
+  const [sending, setSending] = useState(false);
+  const [sent, setSent] = useState(false);
 
-  if (loading) return <div className="flex items-center justify-center h-64"><div className="animate-spin rounded-full h-8 w-8 border-b-2 border-orange-500"></div></div>;
-
-  const items = data?.notifications || data?.tickets || data?.reports || data?.logs || data?.settings || [];
+  const handleSend = async () => {
+    if (!title || !body) return;
+    setSending(true);
+    try {
+      await fetch("/api/admin/notifications/send", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ audience, title, body }),
+      });
+      setSent(true);
+      setTitle(""); setBody("");
+      setTimeout(() => setSent(false), 3000);
+    } catch (e) {
+      console.error(e);
+    } finally {
+      setSending(false);
+    }
+  };
 
   return (
-    <div className="space-y-6">
+    <div className="space-y-6 max-w-2xl">
       <div>
         <h1 className="text-3xl font-bold tracking-tight">Composer une notification</h1>
-        <p className="text-muted-foreground mt-1">Envoyer une notification push, SMS ou email.</p>
+        <p className="text-muted-foreground mt-1">Envoyez une notification push à vos utilisateurs</p>
       </div>
-      <div className="rounded-xl border bg-card p-6">
-        {Array.isArray(items) ? (
-          items.length === 0 ? (
-            <p className="text-muted-foreground text-sm">Aucune donnée disponible.</p>
-          ) : (
-            <div className="space-y-3">
-              {items.slice(0, 15).map((item: any, i: number) => (
-                <div key={item.id || i} className="p-4 rounded-lg border bg-muted/20">
-                  {Object.entries(item).slice(0, 5).map(([k, v]) => (
-                    <div key={k} className="flex justify-between text-sm py-1 border-b last:border-0">
-                      <span className="text-muted-foreground capitalize">{k.replace(/_/g, ' ')}</span>
-                      <span className="font-medium">{typeof v === 'boolean' ? (v ? 'Oui' : 'Non') : typeof v === 'object' ? JSON.stringify(v).slice(0, 40) : String(v ?? '-')}</span>
-                    </div>
-                  ))}
-                </div>
-              ))}
-            </div>
-          )
-        ) : data ? (
-          <div className="space-y-2">
-            {Object.entries(data).slice(0, 15).map(([k, v]) => (
-              <div key={k} className="flex justify-between py-2 border-b last:border-0 text-sm">
-                <span className="text-muted-foreground capitalize">{k.replace(/_/g, ' ')}</span>
-                <span className="font-medium">{typeof v === 'boolean' ? (v ? 'Oui' : 'Non') : typeof v === 'object' && v !== null ? JSON.stringify(v).slice(0, 60) : String(v ?? '-')}</span>
-              </div>
-            ))}
+
+      {sent && (
+        <div className="flex items-center gap-2 p-3 rounded-xl bg-green-50 border border-green-200 text-green-700 text-sm">
+          <Check className="h-4 w-4" /> Notification envoyée avec succès !
+        </div>
+      )}
+
+      <div className="rounded-xl border bg-card p-6 space-y-5">
+        <div>
+          <label className="text-sm font-medium mb-2 block">Audience cible</label>
+          <div className="grid grid-cols-2 gap-2">
+            {AUDIENCES.map(a => {
+              const Icon = a.icon;
+              return (
+                <button
+                  key={a.value}
+                  onClick={() => setAudience(a.value)}
+                  className={`flex items-center gap-2 p-3 rounded-xl border text-sm transition-all ${audience === a.value ? "border-orange-400 bg-orange-50 text-orange-700 font-medium" : "border-border hover:border-orange-200"}`}
+                >
+                  <Icon className="h-4 w-4" /> {a.label}
+                </button>
+              );
+            })}
           </div>
-        ) : null}
+        </div>
+
+        <div>
+          <label className="text-sm font-medium mb-1.5 block">Titre *</label>
+          <input
+            type="text"
+            value={title}
+            onChange={e => setTitle(e.target.value)}
+            placeholder="Ex: Nouvelle promotion disponible !"
+            className="w-full border rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-orange-300"
+          />
+        </div>
+
+        <div>
+          <label className="text-sm font-medium mb-1.5 block">Message *</label>
+          <textarea
+            value={body}
+            onChange={e => setBody(e.target.value)}
+            placeholder="Rédigez votre message ici..."
+            rows={4}
+            className="w-full border rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-orange-300 resize-none"
+          />
+          <p className="text-xs text-muted-foreground mt-1">{body.length}/200 caractères</p>
+        </div>
+
+        <button
+          onClick={handleSend}
+          disabled={sending || !title || !body}
+          className="flex items-center gap-2 px-5 py-2.5 rounded-xl bg-orange-500 text-white text-sm font-medium hover:bg-orange-600 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+        >
+          {sending ? <RefreshCw className="h-4 w-4 animate-spin" /> : <Send className="h-4 w-4" />}
+          {sending ? "Envoi en cours..." : "Envoyer la notification"}
+        </button>
       </div>
     </div>
   );

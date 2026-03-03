@@ -1,52 +1,42 @@
-'use client';
-import { useState, useEffect } from 'react';
+import { Lock } from "lucide-react";
 
-export default function Page() {
-  const [data, setData] = useState<any>(null);
-  const [loading, setLoading] = useState(true);
-
-  useEffect(() => {
-    fetch('/api/admin/settings?section=auth').then(r => r.json()).then(d => setData(d)).finally(() => setLoading(false));
-  }, []);
-
-  if (loading) return <div className="flex items-center justify-center h-64"><div className="animate-spin rounded-full h-8 w-8 border-b-2 border-orange-500"></div></div>;
-
-  const items = data?.settings || data?.tickets || data?.reports || data?.logs || data?.settings || [];
-
+export default function SettingsAuthPage() {
   return (
     <div className="space-y-6">
       <div>
-        <h1 className="text-3xl font-bold tracking-tight">Paramètres authentification</h1>
-        <p className="text-muted-foreground mt-1">Configuration: Paramètres authentification</p>
+        <h1 className="text-3xl font-bold tracking-tight">Authentification</h1>
+        <p className="text-muted-foreground mt-1">Configuration de la sécurité et des méthodes de connexion</p>
       </div>
       <div className="rounded-xl border bg-card p-6">
-        {Array.isArray(items) ? (
-          items.length === 0 ? (
-            <p className="text-muted-foreground text-sm">Aucune donnée disponible.</p>
-          ) : (
-            <div className="space-y-3">
-              {items.slice(0, 15).map((item: any, i: number) => (
-                <div key={item.id || i} className="p-4 rounded-lg border bg-muted/20">
-                  {Object.entries(item).slice(0, 5).map(([k, v]) => (
-                    <div key={k} className="flex justify-between text-sm py-1 border-b last:border-0">
-                      <span className="text-muted-foreground capitalize">{k.replace(/_/g, ' ')}</span>
-                      <span className="font-medium">{typeof v === 'boolean' ? (v ? 'Oui' : 'Non') : typeof v === 'object' ? JSON.stringify(v).slice(0, 40) : String(v ?? '-')}</span>
-                    </div>
-                  ))}
-                </div>
-              ))}
-            </div>
-          )
-        ) : data ? (
-          <div className="space-y-2">
-            {Object.entries(data).slice(0, 15).map(([k, v]) => (
-              <div key={k} className="flex justify-between py-2 border-b last:border-0 text-sm">
-                <span className="text-muted-foreground capitalize">{k.replace(/_/g, ' ')}</span>
-                <span className="font-medium">{typeof v === 'boolean' ? (v ? 'Oui' : 'Non') : typeof v === 'object' && v !== null ? JSON.stringify(v).slice(0, 60) : String(v ?? '-')}</span>
-              </div>
-            ))}
+        <div className="flex flex-col items-center justify-center py-8 text-center">
+          <Lock className="h-12 w-12 text-muted-foreground/30 mb-3" />
+          <p className="font-semibold text-foreground">Configuration disponible</p>
+          <p className="text-sm text-muted-foreground mt-1">
+            Configurez les méthodes d'authentification et les politiques de sécurité.
+          </p>
+        </div>
+        <div className="space-y-3 mt-4">
+          <div className="flex items-center justify-between py-3 border-b last:border-0">
+            <p className="text-sm font-medium">Fournisseur auth</p>
+            <span className="text-sm text-muted-foreground">Firebase Auth</span>
           </div>
-        ) : null}
+          <div className="flex items-center justify-between py-3 border-b last:border-0">
+            <p className="text-sm font-medium">2FA admin</p>
+            <span className="text-sm text-muted-foreground">Recommandé</span>
+          </div>
+          <div className="flex items-center justify-between py-3 border-b last:border-0">
+            <div>
+              <p className="text-sm font-medium">Durée session</p>
+            </div>
+            <input type="text" defaultValue="7 jours" className="border rounded-lg px-3 py-1.5 text-sm w-48 focus:outline-none focus:ring-2 focus:ring-orange-300" />
+          </div>
+          <div className="flex items-center justify-between py-3 border-b last:border-0">
+            <div>
+              <p className="text-sm font-medium">Tentatives max</p>
+            </div>
+            <input type="text" defaultValue="5" className="border rounded-lg px-3 py-1.5 text-sm w-48 focus:outline-none focus:ring-2 focus:ring-orange-300" />
+          </div>
+        </div>
       </div>
     </div>
   );

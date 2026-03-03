@@ -9,7 +9,7 @@ export default function Page() {
 
   useEffect(() => {
     if (!clientId) return;
-    fetch(`/api/admin/clients/${{clientId}}/payments`)
+    fetch(`/api/admin/clients/${clientId}/payments`)
       .then(r => r.json())
       .then(d => setData(d.payments || d.client || d))
       .finally(() => setLoading(false));

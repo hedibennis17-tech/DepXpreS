@@ -1,52 +1,78 @@
-'use client';
-import { useState, useEffect } from 'react';
+"use client";
+import { useParams, useRouter } from "next/navigation";
+import { useState, useEffect } from "react";
+import { ArrowLeft, RefreshCw, Send } from "lucide-react";
 
-export default function Page() {
-  const [data, setData] = useState<any>(null);
+interface Message {
+  id: string;
+  author?: string;
+  role?: string;
+  content?: string;
+  createdAt?: string;
+}
+
+export default function TicketThreadPage() {
+  const { ticketId } = useParams<{ ticketId: string }>();
+  const router = useRouter();
+  const [messages, setMessages] = useState<Message[]>([]);
   const [loading, setLoading] = useState(true);
+  const [reply, setReply] = useState("");
 
   useEffect(() => {
-    fetch('/api/admin/support').then(r => r.json()).then(d => setData(d)).finally(() => setLoading(false));
-  }, []);
+    if (!ticketId) return;
+    fetch(`/api/admin/support/${ticketId}/thread`)
+      .then(r => r.json())
+      .then(d => setMessages(d.messages || []))
+      .finally(() => setLoading(false));
+  }, [ticketId]);
 
-  if (loading) return <div className="flex items-center justify-center h-64"><div className="animate-spin rounded-full h-8 w-8 border-b-2 border-orange-500"></div></div>;
-
-  const items = data?.tickets || data?.tickets || data?.reports || data?.logs || data?.settings || [];
+  if (loading) return (
+    <div className="flex items-center justify-center h-64">
+      <RefreshCw className="h-8 w-8 animate-spin text-orange-500" />
+    </div>
+  );
 
   return (
-    <div className="space-y-6">
+    <div className="space-y-4 max-w-2xl">
+      <button onClick={() => router.back()} className="flex items-center gap-2 text-sm text-muted-foreground hover:text-foreground">
+        <ArrowLeft className="h-4 w-4" /> Retour au ticket
+      </button>
       <div>
-        <h1 className="text-3xl font-bold tracking-tight">Fil de discussion</h1>
-        <p className="text-muted-foreground mt-1">Historique complet du ticket.</p>
+        <h1 className="text-2xl font-bold tracking-tight">Fil de discussion</h1>
+        <p className="text-muted-foreground text-sm mt-0.5">Ticket #{ticketId?.slice(0, 8)}</p>
       </div>
-      <div className="rounded-xl border bg-card p-6">
-        {Array.isArray(items) ? (
-          items.length === 0 ? (
-            <p className="text-muted-foreground text-sm">Aucune donnée disponible.</p>
-          ) : (
-            <div className="space-y-3">
-              {items.slice(0, 15).map((item: any, i: number) => (
-                <div key={item.id || i} className="p-4 rounded-lg border bg-muted/20">
-                  {Object.entries(item).slice(0, 5).map(([k, v]) => (
-                    <div key={k} className="flex justify-between text-sm py-1 border-b last:border-0">
-                      <span className="text-muted-foreground capitalize">{k.replace(/_/g, ' ')}</span>
-                      <span className="font-medium">{typeof v === 'boolean' ? (v ? 'Oui' : 'Non') : typeof v === 'object' ? JSON.stringify(v).slice(0, 40) : String(v ?? '-')}</span>
-                    </div>
-                  ))}
-                </div>
-              ))}
-            </div>
-          )
-        ) : data ? (
-          <div className="space-y-2">
-            {Object.entries(data).slice(0, 15).map(([k, v]) => (
-              <div key={k} className="flex justify-between py-2 border-b last:border-0 text-sm">
-                <span className="text-muted-foreground capitalize">{k.replace(/_/g, ' ')}</span>
-                <span className="font-medium">{typeof v === 'boolean' ? (v ? 'Oui' : 'Non') : typeof v === 'object' && v !== null ? JSON.stringify(v).slice(0, 60) : String(v ?? '-')}</span>
-              </div>
-            ))}
+      <div className="space-y-3">
+        {messages.length === 0 ? (
+          <div className="rounded-xl border bg-card p-8 text-center text-muted-foreground text-sm">
+            Aucun message dans ce ticket
           </div>
-        ) : null}
+        ) : (
+          messages.map(msg => (
+            <div key={msg.id} className={`flex ${msg.role === "admin" ? "justify-end" : "justify-start"}`}>
+              <div className={`max-w-sm rounded-2xl px-4 py-3 text-sm ${msg.role === "admin" ? "bg-orange-500 text-white" : "bg-card border"}`}>
+                <p className={`font-semibold text-xs mb-1 ${msg.role === "admin" ? "text-orange-100" : "text-muted-foreground"}`}>
+                  {msg.author || (msg.role === "admin" ? "Admin" : "Client")}
+                </p>
+                <p>{msg.content || "—"}</p>
+              </div>
+            </div>
+          ))
+        )}
+      </div>
+      <div className="flex gap-2">
+        <input
+          type="text"
+          value={reply}
+          onChange={e => setReply(e.target.value)}
+          placeholder="Répondre au client..."
+          className="flex-1 border rounded-xl px-4 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-orange-300"
+        />
+        <button
+          disabled={!reply}
+          className="px-4 py-2.5 rounded-xl bg-orange-500 text-white hover:bg-orange-600 transition-colors disabled:opacity-50"
+        >
+          <Send className="h-4 w-4" />
+        </button>
       </div>
     </div>
   );

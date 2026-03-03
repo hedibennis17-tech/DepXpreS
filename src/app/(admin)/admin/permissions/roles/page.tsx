@@ -1,52 +1,38 @@
-'use client';
-import { useState, useEffect } from 'react';
+import { Shield, Users, Edit2, Trash2 } from "lucide-react";
 
-export default function Page() {
-  const [data, setData] = useState<any>(null);
-  const [loading, setLoading] = useState(true);
+const ROLES = [
+  { name: "super_admin", label: "Super Admin", color: "bg-red-100 text-red-800", desc: "Accès complet à toutes les fonctionnalités", count: 1 },
+  { name: "admin", label: "Admin", color: "bg-purple-100 text-purple-800", desc: "Gestion des opérations quotidiennes", count: 2 },
+  { name: "manager", label: "Manager", color: "bg-blue-100 text-blue-800", desc: "Supervision des commandes et chauffeurs", count: 3 },
+  { name: "support", label: "Support", color: "bg-green-100 text-green-800", desc: "Gestion des tickets et litiges", count: 2 },
+  { name: "viewer", label: "Lecteur", color: "bg-gray-100 text-gray-700", desc: "Accès lecture seule aux rapports", count: 1 },
+];
 
-  useEffect(() => {
-    fetch('/api/admin/settings').then(r => r.json()).then(d => setData(d)).finally(() => setLoading(false));
-  }, []);
-
-  if (loading) return <div className="flex items-center justify-center h-64"><div className="animate-spin rounded-full h-8 w-8 border-b-2 border-orange-500"></div></div>;
-
-  const items = data?.settings || data?.tickets || data?.reports || data?.logs || data?.settings || [];
-
+export default function PermissionsRolesPage() {
   return (
     <div className="space-y-6">
-      <div>
-        <h1 className="text-3xl font-bold tracking-tight">Rôles</h1>
-        <p className="text-muted-foreground mt-1">Gestion des rôles admin.</p>
+      <div className="flex items-center justify-between">
+        <div>
+          <h1 className="text-3xl font-bold tracking-tight">Rôles</h1>
+          <p className="text-muted-foreground mt-1">Définissez les rôles et leurs permissions dans la plateforme.</p>
+        </div>
+        <button className="flex items-center gap-2 px-4 py-2 rounded-lg bg-orange-500 text-white text-sm hover:bg-orange-600 transition-colors">
+          <Shield className="h-4 w-4" /> Nouveau rôle
+        </button>
       </div>
-      <div className="rounded-xl border bg-card p-6">
-        {Array.isArray(items) ? (
-          items.length === 0 ? (
-            <p className="text-muted-foreground text-sm">Aucune donnée disponible.</p>
-          ) : (
-            <div className="space-y-3">
-              {items.slice(0, 15).map((item: any, i: number) => (
-                <div key={item.id || i} className="p-4 rounded-lg border bg-muted/20">
-                  {Object.entries(item).slice(0, 5).map(([k, v]) => (
-                    <div key={k} className="flex justify-between text-sm py-1 border-b last:border-0">
-                      <span className="text-muted-foreground capitalize">{k.replace(/_/g, ' ')}</span>
-                      <span className="font-medium">{typeof v === 'boolean' ? (v ? 'Oui' : 'Non') : typeof v === 'object' ? JSON.stringify(v).slice(0, 40) : String(v ?? '-')}</span>
-                    </div>
-                  ))}
-                </div>
-              ))}
+      <div className="space-y-3">
+        {ROLES.map(role => (
+          <div key={role.name} className="flex items-center gap-4 p-4 rounded-xl border bg-card hover:border-orange-200 transition-colors">
+            <div className={`px-3 py-1 rounded-full text-xs font-semibold ${role.color}`}>{role.label}</div>
+            <div className="flex-1">
+              <p className="text-sm font-medium">{role.desc}</p>
+              <p className="text-xs text-muted-foreground mt-0.5">{role.count} utilisateur(s) avec ce rôle</p>
             </div>
-          )
-        ) : data ? (
-          <div className="space-y-2">
-            {Object.entries(data).slice(0, 15).map(([k, v]) => (
-              <div key={k} className="flex justify-between py-2 border-b last:border-0 text-sm">
-                <span className="text-muted-foreground capitalize">{k.replace(/_/g, ' ')}</span>
-                <span className="font-medium">{typeof v === 'boolean' ? (v ? 'Oui' : 'Non') : typeof v === 'object' && v !== null ? JSON.stringify(v).slice(0, 60) : String(v ?? '-')}</span>
-              </div>
-            ))}
+            <div className="flex gap-2">
+              <button className="p-1.5 rounded-lg hover:bg-muted text-muted-foreground hover:text-foreground"><Edit2 className="h-4 w-4" /></button>
+            </div>
           </div>
-        ) : null}
+        ))}
       </div>
     </div>
   );

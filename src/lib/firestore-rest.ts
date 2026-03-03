@@ -6,6 +6,7 @@
 
 const PROJECT_ID = process.env.NEXT_PUBLIC_FIREBASE_PROJECT_ID || "studio-1471071484-26917";
 const FIRESTORE_BASE = `https://firestore.googleapis.com/v1/projects/${PROJECT_ID}/databases/(default)/documents`;
+const FIRESTORE_DB_BASE = `https://firestore.googleapis.com/v1/projects/${PROJECT_ID}/databases/(default)`;
 
 // Cache du token d'accès pour éviter de le régénérer à chaque requête
 let cachedToken: string | null = null;
@@ -158,7 +159,7 @@ export async function getCollection(
     structuredQuery.limit = options.limit;
   }
 
-  const url = `${FIRESTORE_BASE.replace("/documents", "")}:runQuery`;
+  const url = `${FIRESTORE_DB_BASE}:runQuery`;
   const res = await fetch(url, {
     method: "POST",
     headers: {

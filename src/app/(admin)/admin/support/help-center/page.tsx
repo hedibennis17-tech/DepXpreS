@@ -1,52 +1,35 @@
-'use client';
-import { useState, useEffect } from 'react';
+"use client";
+import { BookOpen, Plus } from "lucide-react";
 
-export default function Page() {
-  const [data, setData] = useState<any>(null);
-  const [loading, setLoading] = useState(true);
+const ARTICLES = [
+  { title: "Comment passer une commande ?", category: "Clients", views: 245 },
+  { title: "Comment devenir chauffeur ?", category: "Chauffeurs", views: 189 },
+  { title: "Politique de remboursement", category: "Général", views: 156 },
+  { title: "Comment ajouter un dépanneur partenaire ?", category: "Dépanneurs", views: 98 },
+];
 
-  useEffect(() => {
-    fetch('/api/admin/support').then(r => r.json()).then(d => setData(d)).finally(() => setLoading(false));
-  }, []);
-
-  if (loading) return <div className="flex items-center justify-center h-64"><div className="animate-spin rounded-full h-8 w-8 border-b-2 border-orange-500"></div></div>;
-
-  const items = data?.tickets || data?.tickets || data?.reports || data?.logs || data?.settings || [];
-
+export default function SupportHelpCenterPage() {
   return (
     <div className="space-y-6">
-      <div>
-        <h1 className="text-3xl font-bold tracking-tight">Centre d'aide</h1>
-        <p className="text-muted-foreground mt-1">Gestion des tickets: Centre d'aide</p>
+      <div className="flex items-center justify-between">
+        <div>
+          <h1 className="text-3xl font-bold tracking-tight">Centre d'aide</h1>
+          <p className="text-muted-foreground mt-1">Articles et FAQ pour les utilisateurs</p>
+        </div>
+        <button className="flex items-center gap-2 px-4 py-2 rounded-lg bg-orange-500 text-white text-sm hover:bg-orange-600 transition-colors">
+          <Plus className="h-4 w-4" /> Nouvel article
+        </button>
       </div>
-      <div className="rounded-xl border bg-card p-6">
-        {Array.isArray(items) ? (
-          items.length === 0 ? (
-            <p className="text-muted-foreground text-sm">Aucune donnée disponible.</p>
-          ) : (
-            <div className="space-y-3">
-              {items.slice(0, 15).map((item: any, i: number) => (
-                <div key={item.id || i} className="p-4 rounded-lg border bg-muted/20">
-                  {Object.entries(item).slice(0, 5).map(([k, v]) => (
-                    <div key={k} className="flex justify-between text-sm py-1 border-b last:border-0">
-                      <span className="text-muted-foreground capitalize">{k.replace(/_/g, ' ')}</span>
-                      <span className="font-medium">{typeof v === 'boolean' ? (v ? 'Oui' : 'Non') : typeof v === 'object' ? JSON.stringify(v).slice(0, 40) : String(v ?? '-')}</span>
-                    </div>
-                  ))}
-                </div>
-              ))}
+      <div className="space-y-3">
+        {ARTICLES.map((a, i) => (
+          <div key={i} className="flex items-center gap-4 p-4 rounded-xl border bg-card hover:border-orange-200 transition-colors cursor-pointer">
+            <BookOpen className="h-5 w-5 text-orange-400 flex-shrink-0" />
+            <div className="flex-1">
+              <p className="font-medium text-sm">{a.title}</p>
+              <p className="text-xs text-muted-foreground mt-0.5">{a.category} · {a.views} vues</p>
             </div>
-          )
-        ) : data ? (
-          <div className="space-y-2">
-            {Object.entries(data).slice(0, 15).map(([k, v]) => (
-              <div key={k} className="flex justify-between py-2 border-b last:border-0 text-sm">
-                <span className="text-muted-foreground capitalize">{k.replace(/_/g, ' ')}</span>
-                <span className="font-medium">{typeof v === 'boolean' ? (v ? 'Oui' : 'Non') : typeof v === 'object' && v !== null ? JSON.stringify(v).slice(0, 60) : String(v ?? '-')}</span>
-              </div>
-            ))}
           </div>
-        ) : null}
+        ))}
       </div>
     </div>
   );
