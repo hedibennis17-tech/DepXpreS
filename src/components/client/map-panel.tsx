@@ -14,8 +14,8 @@ export function MapPanel() {
           <Image 
             src={mapImage.imageUrl} 
             alt={mapImage.description} 
-            layout="fill"
-            objectFit="cover"
+            fill
+            className="object-cover"
             data-ai-hint={mapImage.imageHint}
           />
         )}
