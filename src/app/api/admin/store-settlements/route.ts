@@ -1,3 +1,4 @@
+// Store settlements API routes
 export const runtime = "nodejs";
 import { NextRequest, NextResponse } from 'next/server';
 import { requirePermission, handleAuthError } from '@/lib/auth/auth-guards';
