@@ -159,7 +159,7 @@ export async function getCollection(
     structuredQuery.limit = options.limit;
   }
 
-  const url = `${FIRESTORE_DB_BASE}:runQuery`;
+  const url = `${FIRESTORE_BASE}:runQuery`;
   const res = await fetch(url, {
     method: "POST",
     headers: {
