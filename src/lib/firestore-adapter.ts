@@ -8,6 +8,26 @@ const PROJECT_ID = process.env.NEXT_PUBLIC_FIREBASE_PROJECT_ID || "studio-147107
 const FIRESTORE_BASE = `https://firestore.googleapis.com/v1/projects/${PROJECT_ID}/databases/(default)/documents`;
 const RUN_QUERY_URL = `https://firestore.googleapis.com/v1/projects/${PROJECT_ID}/databases/(default):runQuery`;
 
+// ─── Cache in-memory pour réduire les appels Firestore (éviter quota 429) ─────
+const CACHE_TTL_MS = 5 * 60 * 1000; // 5 minutes
+interface CacheEntry { data: unknown; expiry: number; }
+const _queryCache = new Map<string, CacheEntry>();
+function getCached<T>(key: string): T | null {
+  const entry = _queryCache.get(key);
+  if (entry && Date.now() < entry.expiry) return entry.data as T;
+  _queryCache.delete(key);
+  return null;
+}
+function setCache(key: string, data: unknown, ttl = CACHE_TTL_MS): void {
+  _queryCache.set(key, { data, expiry: Date.now() + ttl });
+}
+export function invalidateCache(pattern?: string): void {
+  if (!pattern) { _queryCache.clear(); return; }
+  for (const key of _queryCache.keys()) {
+    if (key.includes(pattern)) _queryCache.delete(key);
+  }
+}
+
 // Cache du token d'accès
 let _cachedToken: string | null = null;
 let _tokenExpiry = 0;
@@ -222,7 +242,14 @@ export class DocumentReference {
       const id = this._path.split("/").pop() || "";
       return new DocumentSnapshot(id, `${FIRESTORE_BASE}/${this._path}`, {}, false);
     }
-    if (!res.ok) throw new Error(`Firestore get ${this._path}: ${res.status}`);
+    if (!res.ok) {
+      if (res.status === 429) {
+        console.warn(`[Firestore] Quota dépassé pour ${this._path}`);
+        const id = this._path.split("/").pop() || "";
+        return new DocumentSnapshot(id, `${FIRESTORE_BASE}/${this._path}`, {}, false);
+      }
+      throw new Error(`Firestore get ${this._path}: ${res.status}`);
+    }
     const doc = await res.json() as { name: string; fields?: Record<string, FirestoreValue> };
     return fromFsDoc(doc);
   }
@@ -347,6 +374,16 @@ export class Query {
   }
 
   async get(): Promise<QuerySnapshot> {
+    // Générer une clé de cache unique basée sur la requête
+    const cacheKey = JSON.stringify({
+      col: this._collection,
+      w: this._wheres,
+      o: this._orders,
+      l: this._limitVal,
+    });
+    const cached = getCached<QueryDocumentSnapshot[]>(cacheKey);
+    if (cached) return new QuerySnapshot(cached);
+
     const token = await getAccessToken();
 
     const structuredQuery: Record<string, unknown> = {
@@ -382,7 +419,15 @@ export class Query {
       body: JSON.stringify({ structuredQuery }),
     });
 
-    if (!res.ok) throw new Error(`Firestore query ${this._collection}: ${await res.text()}`);
+    if (!res.ok) {
+      const errText = await res.text();
+      // En cas de quota dépassé (429), retourner cache vide plutôt que bloquer
+      if (res.status === 429) {
+        console.warn(`[Firestore] Quota dépassé pour ${this._collection} — retour cache vide`);
+        return new QuerySnapshot([]);
+      }
+      throw new Error(`Firestore query ${this._collection}: ${errText}`);
+    }
 
     const results = await res.json() as Array<{ document?: { name: string; fields?: Record<string, FirestoreValue> } }>;
     const docs = results
@@ -392,6 +437,9 @@ export class Query {
         const snap = fromFsDoc(doc);
         return new QueryDocumentSnapshot(snap.id, doc.name, snap.data() as Record<string, unknown>);
       });
+
+    // Mettre en cache uniquement les requêtes sans filtre dynamique (listes)
+    if (this._wheres.length === 0) setCache(cacheKey, docs);
 
     return new QuerySnapshot(docs);
   }
