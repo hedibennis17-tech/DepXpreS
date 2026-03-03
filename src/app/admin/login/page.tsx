@@ -14,7 +14,13 @@ import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
 import { Logo } from "@/components/logo"
 import { useRouter, useSearchParams } from "next/navigation"
-import { signInWithEmailAndPassword } from "firebase/auth"
+import {
+  signInWithEmailAndPassword,
+  signOut,
+  setPersistence,
+  browserLocalPersistence,
+  browserSessionPersistence,
+} from "firebase/auth"
 import { auth } from "@/lib/firebase"
 import { Suspense } from "react"
 
@@ -37,8 +43,70 @@ function decodeJWT(token: string): Record<string, unknown> | null {
 // Définir un cookie côté client (lu par le middleware Next.js)
 function setClientCookie(name: string, value: string, days: number) {
   const expires = new Date(Date.now() + days * 24 * 60 * 60 * 1000).toUTCString()
-  // SameSite=Lax compatible avec tous les navigateurs modernes
   document.cookie = `${name}=${encodeURIComponent(value)};expires=${expires};path=/;SameSite=Lax`
+}
+
+// Nettoyer les bases IndexedDB Firebase corrompues
+async function cleanFirebaseIndexedDB() {
+  try {
+    if (!indexedDB.databases) return
+    const databases = await indexedDB.databases()
+    for (const db of databases) {
+      if (db.name && db.name.includes("firebase")) {
+        indexedDB.deleteDatabase(db.name)
+      }
+    }
+  } catch {
+    // Silencieux — certains navigateurs ne supportent pas indexedDB.databases()
+  }
+}
+
+// AuthService robuste avec fallback de persistance
+async function robustSignIn(email: string, password: string) {
+  // Étape 1 : Nettoyer les données Firebase corrompues
+  await cleanFirebaseIndexedDB()
+
+  // Étape 2 : Déconnexion forcée pour nettoyer l'état
+  try {
+    await signOut(auth)
+    await new Promise(r => setTimeout(r, 100))
+  } catch {
+    // Ignorer si pas de session active
+  }
+
+  // Étape 3 : Forcer la persistance sur localStorage (compatible tous navigateurs)
+  try {
+    await setPersistence(auth, browserLocalPersistence)
+  } catch {
+    try {
+      // Fallback sur sessionStorage si localStorage bloqué
+      await setPersistence(auth, browserSessionPersistence)
+    } catch {
+      // Continuer sans persistance explicite
+    }
+  }
+
+  // Étape 4 : Connexion Firebase
+  return await signInWithEmailAndPassword(auth, email, password)
+}
+
+function getUserFriendlyMessage(code: string): string {
+  switch (code) {
+    case "auth/user-not-found":
+    case "auth/wrong-password":
+    case "auth/invalid-credential":
+      return "Email ou mot de passe incorrect."
+    case "auth/too-many-requests":
+      return "Trop de tentatives. Veuillez réessayer dans quelques minutes."
+    case "auth/network-request-failed":
+      return "Erreur réseau. Vérifiez votre connexion internet."
+    case "auth/internal-error":
+      return "Erreur interne Firebase. Veuillez réessayer."
+    case "auth/user-disabled":
+      return "Ce compte a été désactivé."
+    default:
+      return "Erreur de connexion. Veuillez réessayer."
+  }
 }
 
 function AdminLoginForm() {
@@ -62,12 +130,13 @@ function AdminLoginForm() {
 
     setLoading(true)
     try {
-      // 1. Connexion Firebase Auth côté client
-      const userCredential = await signInWithEmailAndPassword(auth, email, password)
-      // Forcer le refresh du token pour obtenir les custom claims à jour
+      // 1. Connexion Firebase Auth robuste (avec nettoyage IndexedDB + persistance forcée)
+      const userCredential = await robustSignIn(email, password)
+
+      // 2. Forcer le refresh du token pour obtenir les custom claims à jour
       const idToken = await userCredential.user.getIdToken(true)
 
-      // 2. Décoder le JWT localement pour extraire le rôle
+      // 3. Décoder le JWT localement pour extraire le rôle
       const claims = decodeJWT(idToken)
       if (!claims) {
         setError("Erreur de décodage du token. Veuillez réessayer.")
@@ -77,7 +146,7 @@ function AdminLoginForm() {
       let role = (claims.role as string) || ""
       const uid = (claims.user_id as string) || (claims.sub as string) || ""
 
-      // 3. Si pas de custom claim "role", vérifier via l'API (Firestore)
+      // 4. Si pas de custom claim "role", vérifier via l'API (Firestore)
       if (!role || !ADMIN_ROLES.includes(role)) {
         try {
           const verifyRes = await fetch("/api/admin/auth/verify", {
@@ -98,11 +167,12 @@ function AdminLoginForm() {
         }
       }
 
-      // 4. Stocker le cookie de session (lu par le middleware Next.js)
+      // 5. Stocker le cookie de session (lu par le middleware Next.js)
       setClientCookie("admin_session", `${uid}:${role}`, 7)
+      setClientCookie("admin_session_mw", `${uid}:${role}`, 7)
       setClientCookie("admin_token", idToken, 1)
 
-      // 5. Appel API pour créer le cookie httpOnly côté serveur
+      // 6. Appel API pour créer le cookie httpOnly côté serveur
       await fetch("/api/admin/auth/login", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
@@ -110,23 +180,11 @@ function AdminLoginForm() {
         credentials: "include",
       }).catch(() => {})
 
-      // 6. Rediriger vers le dashboard admin
+      // 7. Rediriger vers le dashboard admin
       router.push(redirect)
     } catch (err: unknown) {
       const e = err as { code?: string; message?: string }
-      if (
-        e.code === "auth/user-not-found" ||
-        e.code === "auth/wrong-password" ||
-        e.code === "auth/invalid-credential"
-      ) {
-        setError("Email ou mot de passe incorrect.")
-      } else if (e.code === "auth/too-many-requests") {
-        setError("Trop de tentatives. Veuillez réessayer dans quelques minutes.")
-      } else if (e.code === "auth/network-request-failed") {
-        setError("Erreur réseau. Vérifiez votre connexion internet.")
-      } else {
-        setError("Erreur de connexion. Veuillez réessayer.")
-      }
+      setError(getUserFriendlyMessage(e.code || ""))
     } finally {
       setLoading(false)
     }
@@ -161,6 +219,7 @@ function AdminLoginForm() {
                   value={email}
                   onChange={e => { setEmail(e.target.value); setError("") }}
                   required
+                  autoComplete="email"
                 />
               </div>
               <div className="space-y-2">
@@ -172,6 +231,7 @@ function AdminLoginForm() {
                   value={password}
                   onChange={e => { setPassword(e.target.value); setError("") }}
                   required
+                  autoComplete="current-password"
                 />
               </div>
             </CardContent>

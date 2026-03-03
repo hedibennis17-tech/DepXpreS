@@ -6,9 +6,40 @@ import { auth } from '@/lib/firebase';
 import {
   signInWithEmailAndPassword,
   signInWithPopup,
+  signOut,
   GoogleAuthProvider,
   onAuthStateChanged,
+  setPersistence,
+  browserLocalPersistence,
+  browserSessionPersistence,
 } from 'firebase/auth';
+
+// Nettoyer les bases IndexedDB Firebase corrompues
+async function cleanFirebaseIndexedDB() {
+  try {
+    if (!indexedDB.databases) return;
+    const databases = await indexedDB.databases();
+    for (const db of databases) {
+      if (db.name && db.name.includes('firebase')) {
+        indexedDB.deleteDatabase(db.name);
+      }
+    }
+  } catch {
+    // Silencieux
+  }
+}
+
+// Connexion robuste compatible tous navigateurs
+async function robustSignIn(email: string, password: string) {
+  await cleanFirebaseIndexedDB();
+  try { await signOut(auth); await new Promise(r => setTimeout(r, 100)); } catch { /* ok */ }
+  try {
+    await setPersistence(auth, browserLocalPersistence);
+  } catch {
+    try { await setPersistence(auth, browserSessionPersistence); } catch { /* ok */ }
+  }
+  return await signInWithEmailAndPassword(auth, email, password);
+}
 import { Zap, Mail, Lock, Eye, EyeOff, ArrowLeft, Loader2 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -38,7 +69,7 @@ export default function ClientLoginPage() {
     setError('');
     setLoading(true);
     try {
-      await signInWithEmailAndPassword(auth, email, password);
+      await robustSignIn(email, password);
       router.push('/client');
     } catch (err: unknown) {
       const code = (err as { code?: string }).code;

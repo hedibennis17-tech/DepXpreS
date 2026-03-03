@@ -2,7 +2,32 @@
 
 import { useState } from "react";
 import { useRouter } from "next/navigation";
-import { signInWithEmailAndPassword } from "firebase/auth";
+import {
+  signInWithEmailAndPassword,
+  signOut,
+  setPersistence,
+  browserLocalPersistence,
+  browserSessionPersistence,
+} from "firebase/auth";
+
+async function cleanFirebaseIndexedDB() {
+  try {
+    if (!indexedDB.databases) return;
+    const dbs = await indexedDB.databases();
+    for (const db of dbs) {
+      if (db.name && db.name.includes('firebase')) indexedDB.deleteDatabase(db.name);
+    }
+  } catch { /* ok */ }
+}
+
+async function robustSignIn(email: string, password: string) {
+  await cleanFirebaseIndexedDB();
+  try { await signOut(auth); await new Promise(r => setTimeout(r, 100)); } catch { /* ok */ }
+  try { await setPersistence(auth, browserLocalPersistence); } catch {
+    try { await setPersistence(auth, browserSessionPersistence); } catch { /* ok */ }
+  }
+  return await signInWithEmailAndPassword(auth, email, password);
+}
 import { doc, getDoc } from "firebase/firestore";
 import { auth, db } from "@/lib/firebase";
 import { Button } from "@/components/ui/button";
@@ -24,7 +49,7 @@ export default function StoreLoginPage() {
     setError("");
 
     try {
-      const cred = await signInWithEmailAndPassword(auth, email, password);
+      const cred = await robustSignIn(email, password);
       const uid = cred.user.uid;
 
       // Vérifier le rôle dans app_users
