@@ -1,7 +1,50 @@
 # Settings to manage and configure a Firebase App Hosting backend.
 # https://firebase.google.com/docs/app-hosting/configure
-
 runConfig:
-  # Increase this value if you'd like to automatically spin up
-  # more instances in response to increased traffic.
-  maxInstances: 1
+  maxInstances: 4
+  minInstances: 0
+  concurrency: 80
+  cpu: 1
+  memoryMiB: 512
+
+env:
+  - variable: NEXT_PUBLIC_FIREBASE_API_KEY
+    value: "AIzaSyAmDwm43D52jpgDp1MiNg_TvLBn_fDTsU8"
+    availability:
+      - BUILD
+      - RUNTIME
+
+  - variable: NEXT_PUBLIC_FIREBASE_AUTH_DOMAIN
+    value: "studio-1471071484-26917.firebaseapp.com"
+    availability:
+      - BUILD
+      - RUNTIME
+
+  - variable: NEXT_PUBLIC_FIREBASE_PROJECT_ID
+    value: "studio-1471071484-26917"
+    availability:
+      - BUILD
+      - RUNTIME
+
+  - variable: NEXT_PUBLIC_FIREBASE_STORAGE_BUCKET
+    value: "studio-1471071484-26917.firebasestorage.app"
+    availability:
+      - BUILD
+      - RUNTIME
+
+  - variable: NEXT_PUBLIC_FIREBASE_MESSAGING_SENDER_ID
+    value: "4728432828"
+    availability:
+      - BUILD
+      - RUNTIME
+
+  - variable: NEXT_PUBLIC_FIREBASE_APP_ID
+    value: "1:4728432828:web:4ef7796d15d6464cdc48b9"
+    availability:
+      - BUILD
+      - RUNTIME
+
+  - variable: FIREBASE_SERVICE_ACCOUNT_KEY
+    value: '{"type":"service_account","project_id":"studio-1471071484-26917","private_key_id":"0ffe5ee7b897cc06d548d826799e6f3e221da4b3","private_key":"-----BEGIN PRIVATE KEY-----\nMIIEvQIBADANBgkqhkiG9w0BAQEFAASCBKcwggSjAgEAAoIBAQCb5waGLc1ST1hM\ncYNni80rGfvNVe4GMDH3lGRbelrQFSz5TFaOx4edyYYhw6Olz8zMmC487GgWwgjk\nHdo/HFC1DhPRmB+bfXASlm3pK8D0rQNhMD9GbaHeXoRpDamz47qwQLBrBarzurju\nkJM25Ed8Emv4WNI3dBRZLxNm1HazkJR2EWm7lFCWetTwMUq+bw5C8atuyRCdP1S8\n7OQ4huW7go2N2rZ7hfIw/UW8476/Rx4nUiZjOE0ZgBwQuQc5eMhcW8FxnU6a75Qc\nHub0jgaBUAwa/Tz4ZPOk38c6ziNSf2v8bVenqgFtQ19Wu94pjUjOBFPKtS1i39ox\noRjfeHNTAgMBAAECggEAKT7hRH14nSadwzei3rGnWZhZvFTYEK4OgiQxutvvi66W\ng+wU2FhkgjOvN16VfIgx9Azs6rRWw3KZPJTDSUAaABSV3LUk45O3o0tGD9LCDVl6\nk+taSi02DmkuGccCFzQQD5JFukK5HBtR0tfQAs05NlN/WihRkVc2DPQ9604Zi16y\nmMcHUvQyvHYQCnpFct9h3+51l8ilDKYVkVhI42guB/DzqX5OuIR55pdSqm0VIGcA\nVTpTF+yMi8WKcilo9NJ6dHJY0+esdbJd+pFMwhjeae4d2W7untwuFpvB0ltRPaT5\nqRUC8ahB2IvHlZLMnLNSEolATz6A5NB6mlzeJuxESQKBgQDKaYjP8h2hlCEyxf53\nlu9uyxudLuRVO5KTfA74m0llypB5CcAPxN9bK/ums9QoPW8fqDl6XgjT0HOwiuIK\nknmjERzTB3XIG7QiSuh5Djrgo3u9fpj5QyrgNoH3rxMbDAVJgKT5yXKyijlvnnd7\nKOltbhL+4TX0cTMANYqXzkIuuwKBgQDFLUt+t0Xj9BkAGRxrl3Z1K2xYtHzi0GbV\nNYeYJzdwkbhZHyKg4krsdm8PzjRhj40NQCMGVUKpPoFRPQla+z0FX5wE/maQ2Vv5\n72cPUVah2235rOySla9Lbgs9TGq9X7bhTaeh9f/MuvzDpiFY2CQhNuvVhW5b5SRJ\nEfwNgYlgSQKBgQDC8O0QyO/8w/tNOR8g8j7bB8YqlhTWea9rV5nbmUMRRAvsZpWR\nGly7JBsTrDHyJ2i0poHk9leuGB6zsq6M3BFGGZ8XJyIqfXP5aweGP0w5OXpdQGX3\n+tZ6ZkS51OWjsOoOplU9NOTASxuSAp60AOz/tXmZ/DDIoZUq6GX4Wm+nLQKBgFhW\n7MX+8o8oo7LJjVQe7fGc3NP5OSKdYBUSAIgIuevzPXagXnFaMVszzJp2Nj2nhPh0\nzbxeopkU6fcts21RtosbxNjv6Z/n4i9eNPxF4txtZR5BfVRHP9w5l0uFWyUxJsxW\ncE492rcs52X4nmQhoj5HTu3A9CqzxMgACL88VAIRAoGAb7K6Xlsg4P2O95E1yztA\nb9dW1/+B29+0wAy0F5sTE7J6ZAEtQXes46AEV78fqNaSSGVw02hPsH6MYoJYINLp\nTQkYeObl2VDiQne+0mrdaUje9qvF7bcMV7LPxqILHt9A0++MbTLoOjc4Z1HlAJZr\nlXVoxI4qlKIbLjZfNjlmhk0=\n-----END PRIVATE KEY-----\n","client_email":"firebase-adminsdk-fbsvc@studio-1471071484-26917.iam.gserviceaccount.com","client_id":"106351447274334525119","auth_uri":"https://accounts.google.com/o/oauth2/auth","token_uri":"https://oauth2.googleapis.com/token","auth_provider_x509_cert_url":"https://www.googleapis.com/oauth2/v1/certs","client_x509_cert_url":"https://www.googleapis.com/robot/v1/metadata/x509/firebase-adminsdk-fbsvc%40studio-1471071484-26917.iam.gserviceaccount.com","universe_domain":"googleapis.com"}'
+    availability:
+      - RUNTIME
