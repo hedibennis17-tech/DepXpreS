@@ -118,7 +118,8 @@ export async function middleware(request: NextRequest) {
 
   if (isAdminRoute) {
     // Lire le cookie admin_session (uid:role) ou admin_token (Firebase JWT)
-    const sessionToken = request.cookies.get('admin_session')?.value;
+    const sessionToken = request.cookies.get('admin_session')?.value
+                      || request.cookies.get('admin_session_mw')?.value;
     const jwtToken     = request.cookies.get('admin_token')?.value;
 
     let uid  = '';

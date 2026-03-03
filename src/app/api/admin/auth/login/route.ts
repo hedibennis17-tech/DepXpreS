@@ -88,8 +88,19 @@ export async function POST(req: NextRequest) {
       lastName: nameParts.slice(1).join(' ') || '',
     });
 
+    // Cookie httpOnly pour la sécurité (lecture serveur)
     response.cookies.set('admin_session', sessionValue, {
       httpOnly: true,
+      secure: process.env.NODE_ENV === 'production',
+      sameSite: 'lax',
+      maxAge: 60 * 60 * 24 * 7,
+      path: '/',
+    });
+
+    // Cookie non-httpOnly pour le middleware Edge Runtime (Firefox/Edge/Safari)
+    // Le middleware Next.js en Edge Runtime ne peut pas toujours lire les cookies httpOnly
+    response.cookies.set('admin_session_mw', sessionValue, {
+      httpOnly: false,
       secure: process.env.NODE_ENV === 'production',
       sameSite: 'lax',
       maxAge: 60 * 60 * 24 * 7,
@@ -107,5 +118,7 @@ export async function POST(req: NextRequest) {
 export async function DELETE(_req: NextRequest) {
   const response = NextResponse.json({ ok: true, message: 'Déconnexion réussie.' });
   response.cookies.delete('admin_session');
+  response.cookies.delete('admin_session_mw');
+  response.cookies.delete('admin_token');
   return response;
 }
