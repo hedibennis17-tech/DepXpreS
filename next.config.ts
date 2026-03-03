@@ -1,5 +1,6 @@
 import type {NextConfig} from 'next';
 
+// Force rebuild - route structure fixed
 const nextConfig: NextConfig = {
   /* config options here */
   typescript: {
