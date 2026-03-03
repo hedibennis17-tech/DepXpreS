@@ -1,7 +1,17 @@
-"use client"
+"use client";
 
-import { useState } from "react"
-import { Button } from "@/components/ui/button"
+import { Suspense, useState } from "react";
+import { useRouter, useSearchParams } from "next/navigation";
+import {
+  browserLocalPersistence,
+  browserSessionPersistence,
+  setPersistence,
+  signInWithEmailAndPassword,
+  signOut,
+} from "firebase/auth";
+
+import { auth } from "@/lib/firebase";
+import { Button } from "@/components/ui/button";
 import {
   Card,
   CardContent,
@@ -9,85 +19,46 @@ import {
   CardFooter,
   CardHeader,
   CardTitle,
-} from "@/components/ui/card"
-import { Input } from "@/components/ui/input"
-import { Label } from "@/components/ui/label"
-import { Logo } from "@/components/logo"
-import { useRouter, useSearchParams } from "next/navigation"
-import {
-  signInWithEmailAndPassword,
-  signOut,
-  setPersistence,
-  browserLocalPersistence,
-  browserSessionPersistence,
-} from "firebase/auth"
-import { auth } from "@/lib/firebase"
-import { Suspense } from "react"
+} from "@/components/ui/card";
+import { Input } from "@/components/ui/input";
+import { Label } from "@/components/ui/label";
+import { Logo } from "@/components/logo";
 
-const ADMIN_ROLES = ["super_admin", "admin", "dispatcher", "agent"]
-
-// Décoder le payload JWT Firebase sans vérification de signature
-function decodeJWT(token: string): Record<string, unknown> | null {
-  try {
-    const parts = token.split(".")
-    if (parts.length !== 3) return null
-    const payload = parts[1]
-    const padded = payload + "=".repeat((4 - (payload.length % 4)) % 4)
-    const decoded = atob(padded.replace(/-/g, "+").replace(/_/g, "/"))
-    return JSON.parse(decoded)
-  } catch {
-    return null
-  }
-}
-
-// Définir un cookie côté client (lu par le middleware Next.js)
-function setClientCookie(name: string, value: string, days: number) {
-  const expires = new Date(Date.now() + days * 24 * 60 * 60 * 1000).toUTCString()
-  document.cookie = `${name}=${encodeURIComponent(value)};expires=${expires};path=/;SameSite=Lax`
-}
-
-// Nettoyer les bases IndexedDB Firebase corrompues
 async function cleanFirebaseIndexedDB() {
   try {
-    if (!indexedDB.databases) return
-    const databases = await indexedDB.databases()
+    if (!indexedDB.databases) return;
+    const databases = await indexedDB.databases();
     for (const db of databases) {
       if (db.name && db.name.includes("firebase")) {
-        indexedDB.deleteDatabase(db.name)
+        indexedDB.deleteDatabase(db.name);
       }
     }
   } catch {
-    // Silencieux — certains navigateurs ne supportent pas indexedDB.databases()
+    // ignore
   }
 }
 
-// AuthService robuste avec fallback de persistance
 async function robustSignIn(email: string, password: string) {
-  // Étape 1 : Nettoyer les données Firebase corrompues
-  await cleanFirebaseIndexedDB()
+  await cleanFirebaseIndexedDB();
 
-  // Étape 2 : Déconnexion forcée pour nettoyer l'état
   try {
-    await signOut(auth)
-    await new Promise(r => setTimeout(r, 100))
+    await signOut(auth);
+    await new Promise((resolve) => setTimeout(resolve, 100));
   } catch {
-    // Ignorer si pas de session active
+    // ignore
   }
 
-  // Étape 3 : Forcer la persistance sur localStorage (compatible tous navigateurs)
   try {
-    await setPersistence(auth, browserLocalPersistence)
+    await setPersistence(auth, browserLocalPersistence);
   } catch {
     try {
-      // Fallback sur sessionStorage si localStorage bloqué
-      await setPersistence(auth, browserSessionPersistence)
+      await setPersistence(auth, browserSessionPersistence);
     } catch {
-      // Continuer sans persistance explicite
+      // ignore
     }
   }
 
-  // Étape 4 : Connexion Firebase
-  return await signInWithEmailAndPassword(auth, email, password)
+  return signInWithEmailAndPassword(auth, email, password);
 }
 
 function getUserFriendlyMessage(code: string): string {
@@ -95,165 +66,143 @@ function getUserFriendlyMessage(code: string): string {
     case "auth/user-not-found":
     case "auth/wrong-password":
     case "auth/invalid-credential":
-      return "Email ou mot de passe incorrect."
+      return "Email ou mot de passe incorrect.";
     case "auth/too-many-requests":
-      return "Trop de tentatives. Veuillez réessayer dans quelques minutes."
+      return "Trop de tentatives. Veuillez réessayer dans quelques minutes.";
     case "auth/network-request-failed":
-      return "Erreur réseau. Vérifiez votre connexion internet."
+      return "Erreur réseau. Vérifiez votre connexion internet.";
     case "auth/internal-error":
-      return "Erreur interne Firebase. Veuillez réessayer."
+      return "Erreur interne Firebase. Veuillez réessayer.";
     case "auth/user-disabled":
-      return "Ce compte a été désactivé."
+      return "Ce compte a été désactivé.";
     default:
-      return "Erreur de connexion. Veuillez réessayer."
+      return "Erreur de connexion. Veuillez réessayer.";
   }
 }
 
 function AdminLoginForm() {
-  const router = useRouter()
-  const searchParams = useSearchParams()
-  const redirect = searchParams.get("redirect") || "/admin/dashboard"
+  const router = useRouter();
+  const searchParams = useSearchParams();
+  const redirect = searchParams.get("redirect") || "/admin/dashboard";
 
-  const [email, setEmail] = useState("")
-  const [password, setPassword] = useState("")
-  const [error, setError] = useState("")
-  const [loading, setLoading] = useState(false)
+  const [email, setEmail] = useState("");
+  const [password, setPassword] = useState("");
+  const [error, setError] = useState("");
+  const [loading, setLoading] = useState(false);
 
   const handleSubmit = async (e: React.FormEvent) => {
-    e.preventDefault()
-    setError("")
+    e.preventDefault();
+    setError("");
 
     if (!email || !password) {
-      setError("Email et mot de passe requis.")
-      return
+      setError("Email et mot de passe requis.");
+      return;
     }
 
-    setLoading(true)
+    setLoading(true);
+
     try {
-      // 1. Connexion Firebase Auth robuste (avec nettoyage IndexedDB + persistance forcée)
-      const userCredential = await robustSignIn(email, password)
+      const userCredential = await robustSignIn(email, password);
+      const idToken = await userCredential.user.getIdToken(true);
 
-      // 2. Forcer le refresh du token pour obtenir les custom claims à jour
-      const idToken = await userCredential.user.getIdToken(true)
-
-      // 3. Décoder le JWT localement pour extraire le rôle
-      const claims = decodeJWT(idToken)
-      if (!claims) {
-        setError("Erreur de décodage du token. Veuillez réessayer.")
-        return
-      }
-
-      let role = (claims.role as string) || ""
-      const uid = (claims.user_id as string) || (claims.sub as string) || ""
-
-      // 4. Si pas de custom claim "role", vérifier via l'API (Firestore)
-      if (!role || !ADMIN_ROLES.includes(role)) {
-        try {
-          const verifyRes = await fetch("/api/admin/auth/verify", {
-            method: "POST",
-            headers: { "Content-Type": "application/json" },
-            body: JSON.stringify({ idToken, uid, email }),
-          })
-          const verifyData = await verifyRes.json()
-          if (verifyData.ok && verifyData.role && ADMIN_ROLES.includes(verifyData.role)) {
-            role = verifyData.role
-          } else {
-            setError("Accès refusé. Ce compte n'a pas les droits d'administration.")
-            return
-          }
-        } catch {
-          setError("Accès refusé. Ce compte n'a pas les droits d'administration.")
-          return
-        }
-      }
-
-      // 5. Stocker le cookie de session (lu par le middleware Next.js)
-      setClientCookie("admin_session", `${uid}:${role}`, 7)
-      setClientCookie("admin_session_mw", `${uid}:${role}`, 7)
-      setClientCookie("admin_token", idToken, 1)
-
-      // 6. Appel API pour créer le cookie httpOnly côté serveur
-      await fetch("/api/admin/auth/login", {
+      const loginRes = await fetch("/api/admin/auth/login", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ idToken, role }),
         credentials: "include",
-      }).catch(() => {})
+        body: JSON.stringify({ idToken }),
+      });
 
-      // 7. Rediriger vers le dashboard admin
-      router.push(redirect)
+      const loginData = await loginRes.json().catch(() => null);
+
+      if (!loginRes.ok || !loginData?.ok) {
+        await signOut(auth).catch(() => {});
+        setError(loginData?.error || "Accès refusé. Ce compte n'a pas les droits d'administration.");
+        return;
+      }
+
+      setPassword("");
+      router.replace(redirect);
+      router.refresh();
     } catch (err: unknown) {
-      const e = err as { code?: string; message?: string }
-      setError(getUserFriendlyMessage(e.code || ""))
+      const e = err as { code?: string };
+      setError(getUserFriendlyMessage(e.code || ""));
+      setPassword("");
     } finally {
-      setLoading(false)
+      setLoading(false);
     }
-  }
+  };
 
   return (
-    <div className="flex min-h-screen items-center justify-center bg-sidebar">
-      <div className="w-full max-w-md space-y-8">
-        <div className="flex justify-center">
-          <Logo className="h-16 w-16 text-primary-foreground" />
-        </div>
-        <Card className="bg-card text-card-foreground">
-          <CardHeader className="text-center">
-            <CardTitle className="text-2xl">DepXpreS Admin</CardTitle>
-            <CardDescription>
-              Connectez-vous pour accéder au tableau de bord
-            </CardDescription>
-          </CardHeader>
-          <form onSubmit={handleSubmit}>
-            <CardContent className="space-y-4">
-              {error && (
-                <div className="rounded-md bg-red-50 border border-red-200 px-4 py-3 text-sm text-red-700">
-                  {error}
-                </div>
-              )}
-              <div className="space-y-2">
-                <Label htmlFor="email">Email</Label>
-                <Input
-                  id="email"
-                  type="email"
-                  placeholder="admin@depxpres.com"
-                  value={email}
-                  onChange={e => { setEmail(e.target.value); setError("") }}
-                  required
-                  autoComplete="email"
-                />
+    <div className="flex min-h-screen items-center justify-center bg-muted/40 p-6">
+      <Card className="w-full max-w-md rounded-2xl shadow-lg">
+        <CardHeader className="space-y-3 text-center">
+          <div className="mx-auto">
+            <Logo />
+          </div>
+          <CardTitle className="text-2xl font-bold">DepXpreS Admin</CardTitle>
+          <CardDescription>
+            Connectez-vous pour accéder au tableau de bord
+          </CardDescription>
+        </CardHeader>
+
+        <CardContent>
+          <form className="space-y-4" onSubmit={handleSubmit}>
+            {error ? (
+              <div className="rounded-lg border border-red-200 bg-red-50 px-3 py-2 text-sm text-red-700">
+                {error}
               </div>
-              <div className="space-y-2">
-                <Label htmlFor="password">Mot de passe</Label>
-                <Input
-                  id="password"
-                  type="password"
-                  placeholder="Votre mot de passe"
-                  value={password}
-                  onChange={e => { setPassword(e.target.value); setError("") }}
-                  required
-                  autoComplete="current-password"
-                />
-              </div>
-            </CardContent>
-            <CardFooter>
-              <Button className="w-full" type="submit" disabled={loading}>
-                {loading ? "Connexion en cours..." : "Se Connecter"}
-              </Button>
-            </CardFooter>
+            ) : null}
+
+            <div className="space-y-2">
+              <Label htmlFor="email">Email</Label>
+              <Input
+                id="email"
+                name="email"
+                type="email"
+                value={email}
+                onChange={(e) => {
+                  setEmail(e.target.value);
+                  setError("");
+                }}
+                required
+                autoComplete="email"
+              />
+            </div>
+
+            <div className="space-y-2">
+              <Label htmlFor="password">Mot de passe</Label>
+              <Input
+                id="password"
+                name="password"
+                type="password"
+                value={password}
+                onChange={(e) => {
+                  setPassword(e.target.value);
+                  setError("");
+                }}
+                required
+                autoComplete="current-password"
+              />
+            </div>
+
+            <Button className="w-full" type="submit" disabled={loading}>
+              {loading ? "Connexion en cours..." : "Se Connecter"}
+            </Button>
           </form>
-        </Card>
-        <p className="text-center text-xs text-muted-foreground">
-          Accès réservé à l&apos;équipe DepXpreS (super admin, admin, dispatcher, agent)
-        </p>
-      </div>
+        </CardContent>
+
+        <CardFooter className="text-center text-xs text-muted-foreground">
+          Accès réservé à l'équipe DepXpreS (super admin, admin, dispatcher, agent)
+        </CardFooter>
+      </Card>
     </div>
-  )
+  );
 }
 
 export default function AdminLoginPage() {
   return (
-    <Suspense fallback={<div className="flex min-h-screen items-center justify-center">Chargement...</div>}>
+    <Suspense fallback={<div className="p-6">Chargement...</div>}>
       <AdminLoginForm />
     </Suspense>
-  )
+  );
 }

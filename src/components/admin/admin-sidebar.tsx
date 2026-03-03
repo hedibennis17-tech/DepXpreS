@@ -306,12 +306,31 @@ export function AdminSidebar() {
 
   const handleLogout = async () => {
     try {
+      await fetch("/api/admin/auth/login", {
+        method: "DELETE",
+        credentials: "include",
+      });
+    } catch {
+      // ignore
+    }
+    try {
       await signOut(auth);
-    } catch {}
-    // Supprimer les cookies de session
-    document.cookie = 'admin_session=;expires=Thu, 01 Jan 1970 00:00:00 GMT;path=/';
-    document.cookie = 'admin_token=;expires=Thu, 01 Jan 1970 00:00:00 GMT;path=/';
-    router.push('/admin/login');
+    } catch {
+      // ignore
+    }
+    try {
+      localStorage.removeItem("admin_user");
+      localStorage.removeItem("admin_role");
+      sessionStorage.clear();
+    } catch {
+      // ignore
+    }
+    // nettoyage défensif pour vieux cookies hérités
+    document.cookie = "admin_session=;expires=Thu, 01 Jan 1970 00:00:00 GMT;path=/";
+    document.cookie = "admin_session_mw=;expires=Thu, 01 Jan 1970 00:00:00 GMT;path=/";
+    document.cookie = "admin_token=;expires=Thu, 01 Jan 1970 00:00:00 GMT;path=/";
+    router.replace("/admin/login");
+    router.refresh();
   };
 
   return (
