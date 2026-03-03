@@ -1,3 +1,4 @@
+export const runtime = "nodejs";
 /**
  * GET    /api/admin/users/[userId]  — Profil complet d'un utilisateur (users.read)
  * PATCH  /api/admin/users/[userId]  — Modifier le statut, rôle, permissions (users.write)

@@ -1,3 +1,4 @@
+export const runtime = "nodejs";
 /**
  * POST /api/auth/client/signup
  * Crée un compte client : Firebase Auth + app_users + client_profiles dans Firestore

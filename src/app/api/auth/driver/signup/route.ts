@@ -1,3 +1,4 @@
+export const runtime = "nodejs";
 /**
  * POST /api/auth/driver/signup
  * Crée un compte chauffeur : Firebase Auth + app_users + driver_profiles + driver_applications

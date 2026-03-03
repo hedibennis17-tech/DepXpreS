@@ -1,3 +1,4 @@
+export const runtime = "nodejs";
 /**
  * API Admin Login — Version ultra-légère sans Firebase Admin SDK
  * Décode le JWT Firebase localement (pas de réseau, pas de SDK lourd)

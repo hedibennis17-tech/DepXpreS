@@ -1,3 +1,4 @@
+export const runtime = "nodejs";
 /**
  * GET  /api/admin/users  — Lister tous les utilisateurs (users.read)
  * POST /api/admin/users  — Créer admin/dispatcher/agent (users.create, super_admin uniquement)
