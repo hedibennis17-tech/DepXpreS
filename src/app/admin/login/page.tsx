@@ -17,7 +17,6 @@ import { useRouter, useSearchParams } from "next/navigation"
 import { signInWithEmailAndPassword } from "firebase/auth"
 import { auth } from "@/lib/firebase"
 import { Suspense } from "react"
-import { clearCacheAndReload } from "@/lib/clear-cache"
 
 const ADMIN_ROLES = ["super_admin", "admin", "dispatcher", "agent"]
 
@@ -50,13 +49,6 @@ function AdminLoginForm() {
   const [password, setPassword] = useState("")
   const [error, setError] = useState("")
   const [loading, setLoading] = useState(false)
-  const [isRateLimited, setIsRateLimited] = useState(false)
-  const [isClearing, setIsClearing] = useState(false)
-
-  const handleClearCache = async () => {
-    setIsClearing(true)
-    await clearCacheAndReload()
-  }
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault()
@@ -69,12 +61,19 @@ function AdminLoginForm() {
 
     setLoading(true)
     try {
+      console.log("[v0] Starting login for:", email)
+      
       // 1. Connexion Firebase Auth côté client
       const userCredential = await signInWithEmailAndPassword(auth, email, password)
+      console.log("[v0] Firebase auth success, user:", userCredential.user.uid)
+      
       const idToken = await userCredential.user.getIdToken(true)
+      console.log("[v0] Got ID token, length:", idToken.length)
 
       // 2. Décoder le JWT localement pour extraire le rôle
       const claims = decodeJWT(idToken)
+      console.log("[v0] Decoded claims:", JSON.stringify(claims, null, 2))
+      
       if (!claims) {
         setError("Erreur de décodage du token. Veuillez réessayer.")
         return
@@ -82,9 +81,11 @@ function AdminLoginForm() {
 
       const role = (claims.role as string) || ""
       const uid = (claims.user_id as string) || (claims.sub as string) || ""
+      console.log("[v0] Role:", role, "UID:", uid)
 
       // 3. Vérifier que c'est bien un rôle admin
       if (!role || !ADMIN_ROLES.includes(role)) {
+        console.log("[v0] Access denied - role not in ADMIN_ROLES:", ADMIN_ROLES)
         setError("Accès refusé. Ce compte n'a pas les droits d'administration.")
         return
       }
@@ -104,6 +105,8 @@ function AdminLoginForm() {
       router.push(redirect)
     } catch (err: unknown) {
       const e = err as { code?: string; message?: string }
+      console.log("[v0] Login error:", e.code, e.message)
+      
       if (
         e.code === "auth/user-not-found" ||
         e.code === "auth/wrong-password" ||
@@ -112,11 +115,10 @@ function AdminLoginForm() {
         setError("Email ou mot de passe incorrect.")
       } else if (e.code === "auth/too-many-requests") {
         setError("Trop de tentatives. Veuillez réessayer dans quelques minutes.")
-        setIsRateLimited(true)
       } else if (e.code === "auth/network-request-failed") {
         setError("Erreur réseau. Vérifiez votre connexion internet.")
       } else {
-        setError("Erreur de connexion. Veuillez réessayer.")
+        setError(`Erreur de connexion: ${e.code || e.message || "inconnue"}`)
       }
     } finally {
       setLoading(false)
@@ -140,17 +142,7 @@ function AdminLoginForm() {
             <CardContent className="space-y-4">
               {error && (
                 <div className="rounded-md bg-red-50 border border-red-200 px-4 py-3 text-sm text-red-700">
-                  <p>{error}</p>
-                  {isRateLimited && (
-                    <button
-                      type="button"
-                      onClick={handleClearCache}
-                      disabled={isClearing}
-                      className="mt-2 text-xs underline hover:no-underline text-red-800"
-                    >
-                      {isClearing ? "Nettoyage en cours..." : "Vider le cache et réessayer"}
-                    </button>
-                  )}
+                  {error}
                 </div>
               )}
               <div className="space-y-2">
