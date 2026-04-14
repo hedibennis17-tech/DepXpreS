@@ -39,25 +39,37 @@ async function cleanFirebaseIndexedDB() {
 }
 
 async function robustSignIn(email: string, password: string) {
-  await cleanFirebaseIndexedDB();
+  console.log("[v0] robustSignIn started");
+  
+  try {
+    await cleanFirebaseIndexedDB();
+    console.log("[v0] IndexedDB cleaned");
+  } catch (err) {
+    console.log("[v0] IndexedDB cleanup error:", err);
+  }
 
   try {
     await signOut(auth);
     await new Promise((resolve) => setTimeout(resolve, 100));
-  } catch {
-    // ignore
+    console.log("[v0] Previous signOut done");
+  } catch (err) {
+    console.log("[v0] SignOut error (ignored):", err);
   }
 
   try {
     await setPersistence(auth, browserLocalPersistence);
-  } catch {
+    console.log("[v0] Persistence set to local");
+  } catch (err) {
+    console.log("[v0] Local persistence failed:", err);
     try {
       await setPersistence(auth, browserSessionPersistence);
-    } catch {
-      // ignore
+      console.log("[v0] Persistence set to session");
+    } catch (err2) {
+      console.log("[v0] Session persistence also failed:", err2);
     }
   }
 
+  console.log("[v0] Calling signInWithEmailAndPassword...");
   return signInWithEmailAndPassword(auth, email, password);
 }
 
@@ -100,10 +112,14 @@ function AdminLoginForm() {
     }
 
     setLoading(true);
+    console.log("[v0] handleSubmit started");
 
     try {
+      console.log("[v0] Calling robustSignIn...");
       const userCredential = await robustSignIn(email, password);
+      console.log("[v0] robustSignIn success, getting token...");
       const idToken = await userCredential.user.getIdToken(true);
+      console.log("[v0] Got idToken, calling API...");
 
       const loginRes = await fetch("/api/admin/auth/login", {
         method: "POST",
