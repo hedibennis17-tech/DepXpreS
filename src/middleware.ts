@@ -115,7 +115,27 @@ export async function middleware(request: NextRequest) {
   const isAdminRoute = pathname.startsWith("/admin") || pathname.startsWith("/api/admin");
   if (isAdminRoute) {
     const adminToken = request.cookies.get("admin_token")?.value;
-    const role = getRoleFromAdminToken(adminToken);
+    const adminRole = request.cookies.get("admin_role")?.value;
+
+    // Vérification: on a besoin du token ET du rôle
+    // On accepte le rôle du cookie admin_role (set par l'API après vérification server-side)
+    // ET on valide que le token n'est pas expiré via le JWT decode
+    let role: string | null = null;
+
+    if (adminRole && ADMIN_ROLES.includes(adminRole as (typeof ADMIN_ROLES)[number])) {
+      // Si on a un admin_role cookie valide, on l'utilise directement
+      // Le token Firebase est vérifié côté serveur au moment du login
+      if (adminToken) {
+        const claims = decodeJWTPayload(adminToken);
+        const isExpired = claims && claims.exp && Date.now() / 1000 > claims.exp;
+        if (!isExpired) {
+          role = adminRole;
+        }
+      }
+    } else if (adminToken) {
+      // Fallback: essayer de lire le rôle depuis le JWT (pour les sessions existantes)
+      role = getRoleFromAdminToken(adminToken);
+    }
 
     if (!role || !ADMIN_ROLES.includes(role as (typeof ADMIN_ROLES)[number])) {
       if (pathname.startsWith("/api/")) {

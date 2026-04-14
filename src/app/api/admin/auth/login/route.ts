@@ -111,6 +111,14 @@ export async function POST(req: NextRequest) {
     );
 
     response.cookies.set("admin_token", idToken, getCookieOptions(55 * 60));
+    // Cookie séparé pour le rôle — lisible par le middleware sans décoder le JWT
+    response.cookies.set("admin_role", role, {
+      httpOnly: true,
+      secure: process.env.NODE_ENV === "production",
+      sameSite: "lax" as const,
+      maxAge: 55 * 60,
+      path: "/",
+    });
     response.cookies.delete("admin_session");
     response.cookies.delete("admin_session_mw");
     response.headers.set("Cache-Control", "no-store");
@@ -128,6 +136,7 @@ export async function POST(req: NextRequest) {
 export async function DELETE() {
   const response = NextResponse.json({ ok: true, message: "Déconnexion réussie." });
   response.cookies.delete("admin_token");
+  response.cookies.delete("admin_role");
   response.cookies.delete("admin_session");
   response.cookies.delete("admin_session_mw");
   return response;
