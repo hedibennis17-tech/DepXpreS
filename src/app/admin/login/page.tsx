@@ -120,6 +120,24 @@ function AdminLoginForm() {
         return;
       }
 
+      // ✅ FIX: Force-refresh le token Firebase pour inclure les custom claims (role)
+      // setCustomUserClaims() ne met pas à jour le token existant — il faut en générer un nouveau
+      const freshToken = await userCredential.user.getIdToken(true);
+
+      // Re-set le cookie avec le token frais qui contient maintenant le claim "role"
+      const refreshRes = await fetch("/api/admin/auth/login", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        credentials: "include",
+        body: JSON.stringify({ idToken: freshToken }),
+      });
+
+      if (!refreshRes.ok) {
+        await signOut(auth).catch(() => {});
+        setError("Erreur lors du rafraîchissement de la session. Veuillez réessayer.");
+        return;
+      }
+
       setPassword("");
       router.replace(redirect);
       router.refresh();
