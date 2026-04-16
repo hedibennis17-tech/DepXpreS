@@ -51,6 +51,8 @@ interface WizardData {
   maxDeliveryRadius: string;
   acceptsOnlinePayment: boolean;
   acceptsCash: boolean;
+  commerceTypeId: string;
+  commerceTypeName: string;
 }
 
 const DAY_LABELS = ["Dimanche", "Lundi", "Mardi", "Mercredi", "Jeudi", "Vendredi", "Samedi"];
@@ -82,6 +84,7 @@ export function AddStoreWizard({ open, onClose, onSuccess }: AddStoreWizardProps
   const router = useRouter();
   const [step, setStep] = useState(1);
   const [zones, setZones] = useState<Zone[]>([]);
+  const [commerceTypes, setCommerceTypes] = useState<{ id: string; name: string; group: string }[]>([]);
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState("");
 
@@ -104,6 +107,8 @@ export function AddStoreWizard({ open, onClose, onSuccess }: AddStoreWizardProps
     maxDeliveryRadius: "5",
     acceptsOnlinePayment: true,
     acceptsCash: true,
+    commerceTypeId: "",
+    commerceTypeName: "",
   });
 
   // Charger les zones
@@ -114,9 +119,19 @@ export function AddStoreWizard({ open, onClose, onSuccess }: AddStoreWizardProps
         id: d.id,
         name: d.data().nameFr || d.data().nameEn || d.data().name || d.id,
       })));
-    }).catch(() => {
-      // Fallback silencieux
-    });
+    }).catch(() => {});
+  }, [open]);
+
+  // Charger les 100 types de commerce
+  useEffect(() => {
+    if (!open) return;
+    getDocs(query(collection(db, "commerce_types"), orderBy("sortOrder"))).then(snap => {
+      setCommerceTypes(snap.docs.map(d => ({
+        id: d.id,
+        name: d.data().name as string,
+        group: d.data().group as string,
+      })));
+    }).catch(() => {});
   }, [open]);
 
   const set = (field: keyof WizardData, value: unknown) =>
@@ -205,7 +220,7 @@ export function AddStoreWizard({ open, onClose, onSuccess }: AddStoreWizardProps
     <Dialog open={open} onOpenChange={handleClose}>
       <DialogContent className="max-w-2xl max-h-[90vh] overflow-y-auto">
         <DialogHeader>
-          <DialogTitle className="text-xl font-bold">Ajouter un dépanneur partenaire</DialogTitle>
+          <DialogTitle className="text-xl font-bold">Ajouter un commercant partenaire</DialogTitle>
         </DialogHeader>
 
         {/* Stepper */}
@@ -239,7 +254,7 @@ export function AddStoreWizard({ open, onClose, onSuccess }: AddStoreWizardProps
 
         {/* Contenu par étape */}
         <div className="space-y-4 min-h-[320px]">
-          {step === 1 && <Step1 data={data} set={set} zones={zones} />}
+          {step === 1 && <Step1 data={data} set={set} zones={zones} commerceTypes={commerceTypes} />}
           {step === 2 && <Step2 data={data} updateHour={updateHour} />}
           {step === 3 && <Step3 data={data} set={set} />}
           {step === 4 && <Step4 data={data} zones={zones} />}
@@ -264,7 +279,7 @@ export function AddStoreWizard({ open, onClose, onSuccess }: AddStoreWizardProps
             </Button>
           ) : (
             <Button onClick={handleSubmit} disabled={saving} className="bg-green-600 hover:bg-green-700 text-white min-w-32">
-              {saving ? <><Loader2 className="h-4 w-4 mr-2 animate-spin" /> Création...</> : <><CheckCircle2 className="h-4 w-4 mr-2" /> Créer le dépanneur</>}
+              {saving ? <><Loader2 className="h-4 w-4 mr-2 animate-spin" /> Création...</> : <><CheckCircle2 className="h-4 w-4 mr-2" /> Créer le commercant</>}
             </Button>
           )}
         </div>
@@ -275,17 +290,49 @@ export function AddStoreWizard({ open, onClose, onSuccess }: AddStoreWizardProps
 
 // ─── Étape 1 : Informations ───────────────────────────────────────────────────
 
-function Step1({ data, set, zones }: { data: WizardData; set: (f: keyof WizardData, v: unknown) => void; zones: Zone[] }) {
+function Step1({ data, set, zones, commerceTypes }: { data: WizardData; set: (f: keyof WizardData, v: unknown) => void; zones: Zone[]; commerceTypes: { id: string; name: string; group: string }[] }) {
   return (
     <div className="space-y-5">
       <div>
         <h3 className="font-semibold text-base mb-3 flex items-center gap-2">
-          <Store className="h-4 w-4 text-orange-500" /> Informations du dépanneur
+          <Store className="h-4 w-4 text-orange-500" /> Informations du commercant
         </h3>
         <div className="grid grid-cols-1 gap-3">
           <div>
-            <Label htmlFor="name" className="text-sm font-medium">Nom du dépanneur <span className="text-red-500">*</span></Label>
-            <Input id="name" placeholder="Ex: Dépanneur Centre-Ville 24h" value={data.name} onChange={e => set("name", e.target.value)} className="mt-1" />
+            <Label htmlFor="name" className="text-sm font-medium">Nom du commercant <span className="text-red-500">*</span></Label>
+            <Input id="name" placeholder="Ex: Pâtisserie du Quartier, Fleuriste Chez Marie..." value={data.name} onChange={e => set("name", e.target.value)} className="mt-1" />
+          </div>
+          <div>
+            <Label className="text-sm font-medium">Type de commerce <span className="text-red-500">*</span></Label>
+            <Select
+              value={data.commerceTypeId}
+              onValueChange={v => {
+                const ct = commerceTypes.find(c => c.id === v);
+                set("commerceTypeId", v);
+                set("commerceTypeName", ct?.name ?? "");
+              }}
+            >
+              <SelectTrigger className="mt-1">
+                <SelectValue placeholder={commerceTypes.length === 0 ? "Chargement des types..." : "Sélectionner le type de commerce..."} />
+              </SelectTrigger>
+              <SelectContent className="max-h-80">
+                {(() => {
+                  const groups = Array.from(new Set(commerceTypes.map(c => c.group)));
+                  return groups.map(group => (
+                    <div key={group}>
+                      <div className="px-2 py-1.5 text-xs font-semibold text-muted-foreground bg-muted/60 sticky top-0 border-b">
+                        📂 {group}
+                      </div>
+                      {commerceTypes.filter(c => c.group === group).map(ct => (
+                        <SelectItem key={ct.id} value={ct.id}>
+                          {ct.name}
+                        </SelectItem>
+                      ))}
+                    </div>
+                  ));
+                })()}
+              </SelectContent>
+            </Select>
           </div>
           <div>
             <Label htmlFor="address" className="text-sm font-medium">Adresse <span className="text-red-500">*</span></Label>

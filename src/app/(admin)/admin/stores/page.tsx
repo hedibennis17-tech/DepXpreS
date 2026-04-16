@@ -52,7 +52,7 @@ export default function StoresPage() {
         const raw = d.data();
         return {
           id: d.id,
-          name: raw.name || raw.storeName || "Dépanneur",
+          name: raw.name || raw.storeName || "Commercant",
           address: raw.address || raw.fullAddress || "",
           phone: raw.phone || raw.phoneNumber || "",
           status: raw.status || "active",
@@ -100,9 +100,9 @@ export default function StoresPage() {
       {/* En-tête */}
       <div className="flex items-center justify-between">
         <div>
-          <h1 className="text-3xl font-bold tracking-tight">Dépanneurs partenaires</h1>
+          <h1 className="text-3xl font-bold tracking-tight">Commercants partenaires</h1>
           <p className="text-muted-foreground">
-            {allStores.length} dépanneur{allStores.length !== 1 ? "s" : ""} — Firebase temps réel
+            {allStores.length} commercant{allStores.length !== 1 ? "s" : ""} — Firebase temps réel
           </p>
         </div>
         <div className="flex items-center gap-2">
@@ -122,7 +122,7 @@ export default function StoresPage() {
             className="gap-2 bg-orange-500 hover:bg-orange-600 text-white"
           >
             <Plus className="h-4 w-4" />
-            Ajouter un dépanneur
+            Ajouter un commercant
           </Button>
         </div>
       </div>
@@ -154,7 +154,7 @@ export default function StoresPage() {
       <Card>
         <CardHeader className="pb-3">
           <div className="flex flex-col md:flex-row gap-3 items-start md:items-center justify-between">
-            <CardTitle className="text-base">Liste des dépanneurs</CardTitle>
+            <CardTitle className="text-base">Liste des commercants partenaires</CardTitle>
             <div className="flex flex-wrap gap-2 w-full md:w-auto">
               <div className="relative flex-1 min-w-48">
                 <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
@@ -186,20 +186,20 @@ export default function StoresPage() {
           ) : stores.length === 0 ? (
             <div className="flex flex-col items-center justify-center h-48 text-muted-foreground">
               <Store className="h-10 w-10 mb-2 opacity-30" />
-              <p className="mb-3">Aucun dépanneur trouvé</p>
+              <p className="mb-3">Aucun commercant trouvé</p>
               <Button
                 size="sm"
                 onClick={() => setWizardOpen(true)}
                 className="gap-2 bg-orange-500 hover:bg-orange-600 text-white"
               >
-                <Plus className="h-4 w-4" /> Ajouter le premier dépanneur
+                <Plus className="h-4 w-4" /> Ajouter le premier commercant
               </Button>
             </div>
           ) : (
             <Table>
               <TableHeader>
                 <TableRow className="bg-muted/30">
-                  <TableHead className="pl-6">Dépanneur</TableHead>
+                  <TableHead className="pl-6">Commercant</TableHead>
                   <TableHead>Adresse</TableHead>
                   <TableHead>Statut</TableHead>
                   <TableHead>Ouvert</TableHead>

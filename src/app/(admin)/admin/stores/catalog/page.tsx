@@ -65,8 +65,16 @@ export default function StoresCatalogPage() {
     getDocs(query(collection(db, "stores"), orderBy("name")))
       .then(snap => setStores(snap.docs.map(d => ({ id: d.id, name: (d.data().name as string) || d.id }))))
       .catch(() => {});
-    getDocs(query(collection(db, "categories"), orderBy("sortOrder")))
-      .then(snap => setCategories(snap.docs.map(d => ({ id: d.id, name: (d.data().name as string) || d.id }))))
+    getDocs(collection(db, "categories"))
+      .then(snap => {
+        const cats = snap.docs.map(d => ({ 
+          id: d.id, 
+          name: (d.data().name as string) || d.id,
+          sortOrder: (d.data().sortOrder as number) || 999
+        }));
+        cats.sort((a, b) => a.sortOrder - b.sortOrder);
+        setCategories(cats);
+      })
       .catch(() => {});
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
