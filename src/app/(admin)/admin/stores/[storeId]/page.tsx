@@ -396,7 +396,6 @@ export default function StoreDetailPage() {
                         <p className="text-xs text-muted-foreground mt-1">Chargement des types...</p>
                       )}
                     </div>
-                    </div>
                   </div>
                 </div>
               ) : (
