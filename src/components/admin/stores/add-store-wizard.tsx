@@ -3,6 +3,7 @@
 import { useState, useEffect } from "react";
 import { useRouter } from "next/navigation";
 import { collection, getDocs, query, orderBy } from "firebase/firestore";
+import { COMMERCE_TYPES } from "@/lib/commerce-types";
 import { db } from "@/lib/firebase";
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { Button } from "@/components/ui/button";
@@ -84,7 +85,7 @@ export function AddStoreWizard({ open, onClose, onSuccess }: AddStoreWizardProps
   const router = useRouter();
   const [step, setStep] = useState(1);
   const [zones, setZones] = useState<Zone[]>([]);
-  const [commerceTypes, setCommerceTypes] = useState<{ id: string; name: string; group: string }[]>([]);
+  const [commerceTypes] = useState(COMMERCE_TYPES);
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState("");
 
@@ -122,17 +123,7 @@ export function AddStoreWizard({ open, onClose, onSuccess }: AddStoreWizardProps
     }).catch(() => {});
   }, [open]);
 
-  // Charger les 100 types de commerce
-  useEffect(() => {
-    if (!open) return;
-    getDocs(query(collection(db, "commerce_types"), orderBy("sortOrder"))).then(snap => {
-      setCommerceTypes(snap.docs.map(d => ({
-        id: d.id,
-        name: d.data().name as string,
-        group: d.data().group as string,
-      })));
-    }).catch(() => {});
-  }, [open]);
+  // Types de commerce chargés depuis constantes statiques
 
   const set = (field: keyof WizardData, value: unknown) =>
     setData(prev => ({ ...prev, [field]: value }));
@@ -290,7 +281,7 @@ export function AddStoreWizard({ open, onClose, onSuccess }: AddStoreWizardProps
 
 // ─── Étape 1 : Informations ───────────────────────────────────────────────────
 
-function Step1({ data, set, zones, commerceTypes }: { data: WizardData; set: (f: keyof WizardData, v: unknown) => void; zones: Zone[]; commerceTypes: { id: string; name: string; group: string }[] }) {
+function Step1({ data, set, zones, commerceTypes }: { data: WizardData; set: (f: keyof WizardData, v: unknown) => void; zones: Zone[]; commerceTypes: typeof COMMERCE_TYPES }) {
   return (
     <div className="space-y-5">
       <div>

@@ -21,7 +21,7 @@ export default function Page() {
     <div className="space-y-6">
       <div className="flex items-center justify-between">
         <div>
-          <h1 className="text-3xl font-bold tracking-tight">Dépanneurs inactifs</h1>
+          <h1 className="text-3xl font-bold tracking-tight">Commercants inactifs</h1>
           <p className="text-muted-foreground mt-1">{filtered.length} résultat(s)</p>
         </div>
       </div>

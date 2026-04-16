@@ -21,7 +21,7 @@ export default function Page() {
     <div className="space-y-6">
       <div className="flex items-center justify-between">
         <div>
-          <h1 className="text-3xl font-bold tracking-tight">Horaires des dépanneurs</h1>
+          <h1 className="text-3xl font-bold tracking-tight">Horaires des commercants</h1>
           <p className="text-muted-foreground mt-1">{filtered.length} résultat(s)</p>
         </div>
       </div>

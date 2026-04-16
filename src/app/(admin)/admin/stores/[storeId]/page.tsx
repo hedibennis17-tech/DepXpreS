@@ -13,6 +13,7 @@ import { Switch } from "@/components/ui/switch";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { cn } from "@/lib/utils";
+import { COMMERCE_TYPES } from "@/lib/commerce-types";
 import {
   Store, ArrowLeft, RefreshCw, Star, ShoppingBag, TrendingUp,
   MapPin, Phone, Mail, Clock, Edit2, Save, X, CheckCircle2,
@@ -91,7 +92,7 @@ export default function StoreDetailPage() {
   const [editMode, setEditMode] = useState(false);
   const [saving, setSaving] = useState(false);
   const [editData, setEditData] = useState<Partial<StoreData>>({});
-  const [commerceTypes, setCommerceTypes] = useState<{ id: string; name: string; group: string }[]>([]);
+  const commerceTypes = COMMERCE_TYPES;
 
   const fetchStore = useCallback(async () => {
     if (!storeId) return;
@@ -102,7 +103,7 @@ export default function StoreDetailPage() {
       const res = await fetch(`/api/admin/stores/${storeId}`);
       if (!res.ok) {
         const err = await res.json();
-        throw new Error(err.error || "Dépanneur introuvable");
+        throw new Error(err.error || "Commercant introuvable");
       }
       const json = await res.json();
       const s = json.store as StoreData;
@@ -130,18 +131,7 @@ export default function StoreDetailPage() {
 
   useEffect(() => { fetchStore(); }, [fetchStore]);
 
-  // Charger la liste des 100 types de commerce
-  useEffect(() => {
-    import("firebase/firestore").then(({ collection, getDocs, query, orderBy }) => {
-      getDocs(query(collection(db, "commerce_types"), orderBy("sortOrder"))).then(snap => {
-        setCommerceTypes(snap.docs.map(d => ({
-          id: d.id,
-          name: d.data().name as string,
-          group: d.data().group as string,
-        })));
-      }).catch(() => {});
-    });
-  }, []);
+  // Types de commerce: données statiques depuis commerce-types.ts
 
   const startEdit = () => {
     if (!store) return;
@@ -205,7 +195,7 @@ export default function StoreDetailPage() {
     return (
       <div className="flex items-center justify-center h-64">
         <RefreshCw className="h-8 w-8 animate-spin text-orange-500" />
-        <span className="ml-3 text-muted-foreground">Chargement du dépanneur...</span>
+        <span className="ml-3 text-muted-foreground">Chargement du commercant...</span>
       </div>
     );
   }
@@ -214,7 +204,7 @@ export default function StoreDetailPage() {
     return (
       <div className="flex flex-col items-center justify-center h-64 gap-4">
         <AlertCircle className="h-12 w-12 text-red-400" />
-        <p className="text-lg font-medium text-red-600">{error || "Dépanneur introuvable"}</p>
+        <p className="text-lg font-medium text-red-600">{error || "Commercant introuvable"}</p>
         <Button variant="outline" onClick={() => router.push("/admin/stores")}>
           <ArrowLeft className="h-4 w-4 mr-2" /> Retour à la liste
         </Button>
@@ -308,7 +298,7 @@ export default function StoreDetailPage() {
           <Card>
             <CardHeader className="pb-3">
               <CardTitle className="text-base flex items-center gap-2">
-                <Store className="h-4 w-4 text-orange-500" /> Informations du dépanneur
+                <Store className="h-4 w-4 text-orange-500" /> Informations du commercant
               </CardTitle>
             </CardHeader>
             <CardContent className="space-y-4">
@@ -578,7 +568,7 @@ export default function StoreDetailPage() {
             <CardContent>
               <div className="flex flex-col items-center justify-center h-32 text-muted-foreground">
                 <ShoppingBag className="h-8 w-8 mb-2 opacity-30" />
-                <p className="text-sm">Voir les commandes de ce dépanneur</p>
+                <p className="text-sm">Voir les commandes de ce commercant</p>
                 <Button
                   variant="outline"
                   size="sm"

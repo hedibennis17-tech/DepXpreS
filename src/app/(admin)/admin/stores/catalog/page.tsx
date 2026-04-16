@@ -12,6 +12,7 @@ import { Badge } from "@/components/ui/badge";
 import { Switch } from "@/components/ui/switch";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from "@/components/ui/dialog";
+import { COMMERCE_TYPES } from "@/lib/commerce-types";
 import { Plus, Search, RefreshCw, Package, ImageIcon, X, Loader2, Store, Tag, Barcode, DollarSign, Layers, AlertCircle, ShieldAlert } from "lucide-react";
 
 type ProductRow = {
@@ -25,7 +26,7 @@ type CategoryOption = { id: string; name: string };
 
 const EMPTY_FORM = {
   name: "", description: "", barcode: "", price: "", stock: "",
-  categoryId: "", storeId: "", requiresAgeVerification: false, isActive: true,
+  categoryId: "none", storeId: "", requiresAgeVerification: false, isActive: true,
 };
 
 export default function StoresCatalogPage() {
@@ -127,7 +128,7 @@ export default function StoresCatalogPage() {
         name: form.name.trim(), description: form.description.trim(),
         barcode: form.barcode.trim(), price,
         stock: parseInt(form.stock) || 0,
-        categoryId: form.categoryId || null, storeId: form.storeId,
+        categoryId: (form.categoryId && form.categoryId !== "none") ? form.categoryId : null, storeId: form.storeId,
         requiresAgeVerification: form.requiresAgeVerification,
         isActive: form.isActive,
         ...(imageUrl ? { imageUrl } : {}),
@@ -355,7 +356,7 @@ export default function StoresCatalogPage() {
                     <SelectValue placeholder="Sélectionner..." />
                   </SelectTrigger>
                   <SelectContent>
-                    <SelectItem value="">— Aucune catégorie —</SelectItem>
+                    <SelectItem value="none">— Aucune catégorie —</SelectItem>
                     {categories.map(c => <SelectItem key={c.id} value={c.id}>{c.name}</SelectItem>)}
                   </SelectContent>
                 </Select>
