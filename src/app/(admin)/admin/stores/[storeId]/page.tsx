@@ -54,6 +54,8 @@ interface StoreData {
   maxDeliveryRadius?: number;
   acceptsOnlinePayment?: boolean;
   acceptsCash?: boolean;
+  commerceTypeId?: string;
+  commerceTypeName?: string;
   createdAt?: string;
   updatedAt?: string;
 }
@@ -89,6 +91,7 @@ export default function StoreDetailPage() {
   const [editMode, setEditMode] = useState(false);
   const [saving, setSaving] = useState(false);
   const [editData, setEditData] = useState<Partial<StoreData>>({});
+  const [commerceTypes, setCommerceTypes] = useState<{ id: string; name: string; group: string }[]>([]);
 
   const fetchStore = useCallback(async () => {
     if (!storeId) return;
@@ -126,6 +129,19 @@ export default function StoreDetailPage() {
   }, [storeId]);
 
   useEffect(() => { fetchStore(); }, [fetchStore]);
+
+  // Charger la liste des 100 types de commerce
+  useEffect(() => {
+    import("firebase/firestore").then(({ collection, getDocs, query, orderBy }) => {
+      getDocs(query(collection(db, "commerce_types"), orderBy("sortOrder"))).then(snap => {
+        setCommerceTypes(snap.docs.map(d => ({
+          id: d.id,
+          name: d.data().name as string,
+          group: d.data().group as string,
+        })));
+      }).catch(() => {});
+    });
+  }, []);
 
   const startEdit = () => {
     if (!store) return;
@@ -299,7 +315,7 @@ export default function StoreDetailPage() {
               {editMode ? (
                 <div className="grid grid-cols-1 gap-4">
                   <div>
-                    <Label className="text-sm font-medium">Nom du dépanneur</Label>
+                    <Label className="text-sm font-medium">Nom du store</Label>
                     <Input value={editData.name ?? store.name} onChange={e => set("name", e.target.value)} className="mt-1" />
                   </div>
                   <div>
@@ -342,6 +358,44 @@ export default function StoreDetailPage() {
                     <div>
                       <Label className="text-sm font-medium">Téléphone propriétaire</Label>
                       <Input value={editData.ownerPhone ?? store.ownerPhone ?? ""} onChange={e => set("ownerPhone", e.target.value)} className="mt-1" />
+                    </div>
+                    {/* Type de commerce */}
+                    <div className="col-span-2">
+                      <Label className="text-sm font-medium">Type de commerce</Label>
+                      {commerceTypes.length > 0 ? (
+                        <Select
+                          value={editData.commerceTypeId ?? store.commerceTypeId ?? ""}
+                          onValueChange={v => {
+                            const ct = commerceTypes.find(c => c.id === v);
+                            set("commerceTypeId", v);
+                            set("commerceTypeName", ct?.name ?? "");
+                          }}
+                        >
+                          <SelectTrigger className="mt-1">
+                            <SelectValue placeholder="Sélectionner un type de commerce..." />
+                          </SelectTrigger>
+                          <SelectContent className="max-h-72">
+                            {(() => {
+                              const groups = Array.from(new Set(commerceTypes.map(c => c.group)));
+                              return groups.map(group => (
+                                <div key={group}>
+                                  <div className="px-2 py-1.5 text-xs font-semibold text-muted-foreground bg-muted/50 sticky top-0">
+                                    {group}
+                                  </div>
+                                  {commerceTypes.filter(c => c.group === group).map(ct => (
+                                    <SelectItem key={ct.id} value={ct.id}>
+                                      {ct.name}
+                                    </SelectItem>
+                                  ))}
+                                </div>
+                              ));
+                            })()}
+                          </SelectContent>
+                        </Select>
+                      ) : (
+                        <p className="text-xs text-muted-foreground mt-1">Chargement des types...</p>
+                      )}
+                    </div>
                     </div>
                   </div>
                 </div>

@@ -100,14 +100,14 @@ const menuItems = [
     ]
   },
   {
-    title: "Dépanneurs",
+    title: "Stores",
     icon: Store,
     basePath: "/admin/stores",
     subItems: [
-        { label: "Tous les dépanneurs", href: "/admin/stores" },
+        { label: "Tous les stores", href: "/admin/stores" },
         { label: "Actifs", href: "/admin/stores/active" },
         { label: "Horaires", href: "/admin/stores/schedules" },
-        { label: "Catalogue", href: "/admin/stores/catalog" },
+        { label: "Catalogue global", href: "/admin/stores/catalog" },
         { label: "Stock & visibilité", href: "/admin/stores/stock" },
         { label: "Tarification", href: "/admin/stores/pricing" },
         { label: "Performance", href: "/admin/stores/performance" },
