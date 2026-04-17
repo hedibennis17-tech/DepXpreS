@@ -25,11 +25,10 @@ type ProductRow = {
   commerceTypeId?: string; commerceTypeName?: string;
 };
 type StoreOption = { id: string; name: string };
-type CategoryOption = { id: string; name: string; sortOrder: number };
 
 const EMPTY_FORM = {
   name: "", description: "", barcode: "", price: "", stock: "",
-  categoryId: "none", storeId: "", commerceTypeId: "none",
+  storeId: "", commerceTypeId: "none",
   requiresAgeVerification: false, isActive: true,
 };
 
@@ -41,7 +40,6 @@ export default function StoresCatalogPage() {
   const [search, setSearch] = useState("");
   const [refreshing, setRefreshing] = useState(false);
   const [stores, setStores] = useState<StoreOption[]>([]);
-  const [categories, setCategories] = useState<CategoryOption[]>([]);
   const [modalOpen, setModalOpen] = useState(false);
   const [form, setForm] = useState({ ...EMPTY_FORM });
   const [imageFile, setImageFile] = useState<File | null>(null);
@@ -72,14 +70,7 @@ export default function StoresCatalogPage() {
     getDocs(collection(db, "stores"))
       .then(snap => setStores(snap.docs.map(d => ({ id: d.id, name: (d.data().name as string) || d.id })).sort((a,b) => a.name.localeCompare(b.name))))
       .catch(() => {});
-    // Catégories
-    getDocs(collection(db, "categories"))
-      .then(snap => {
-        const cats = snap.docs.map(d => ({ id: d.id, name: (d.data().name as string) || d.id, sortOrder: (d.data().sortOrder as number) || 999 }));
-        cats.sort((a, b) => a.sortOrder - b.sortOrder);
-        setCategories(cats);
-      })
-      .catch(() => {});
+
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
@@ -150,7 +141,6 @@ export default function StoresCatalogPage() {
         barcode: form.barcode.trim(),
         price,
         stock: parseInt(form.stock) || 0,
-        categoryId: (form.categoryId && form.categoryId !== "none") ? form.categoryId : null,
         storeId: form.storeId,
         commerceTypeId: (form.commerceTypeId && form.commerceTypeId !== "none") ? form.commerceTypeId : null,
         commerceTypeName: ct?.name || null,
@@ -376,19 +366,7 @@ export default function StoresCatalogPage() {
               </div>
             </div>
 
-            {/* Catégorie */}
-            <div>
-              <Label className="text-sm font-medium">Catégorie produit</Label>
-              <Select value={form.categoryId} onValueChange={v => setForm(f => ({ ...f, categoryId: v }))}>
-                <SelectTrigger className="mt-1">
-                  <SelectValue placeholder="Sélectionner une catégorie..." />
-                </SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="none">— Aucune catégorie —</SelectItem>
-                  {categories.map(c => <SelectItem key={c.id} value={c.id}>{c.name}</SelectItem>)}
-                </SelectContent>
-              </Select>
-            </div>
+
 
             {/* Switches */}
             <div className="flex flex-col sm:flex-row gap-4 pt-1">

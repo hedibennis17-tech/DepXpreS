@@ -27,6 +27,7 @@ function getAdminApp(): admin.app.App {
   return admin.initializeApp({
     credential: admin.credential.cert(serviceAccount),
     projectId: (serviceAccount as Record<string, string>).project_id || process.env.NEXT_PUBLIC_FIREBASE_PROJECT_ID,
+    storageBucket: process.env.NEXT_PUBLIC_FIREBASE_STORAGE_BUCKET || "studio-1471071484-26917.firebasestorage.app",
   });
 }
 
@@ -72,3 +73,18 @@ export const adminAuth = new Proxy({} as admin.auth.Auth, {
 // FieldValue export pour compatibilité
 export const FieldValue = admin.firestore.FieldValue;
 export const Timestamp = admin.firestore.Timestamp;
+
+// Storage Admin
+export function getAdminStorage(): admin.storage.Storage {
+  const app = getAdminApp();
+  return admin.storage(app);
+}
+
+export const adminStorage = new Proxy({} as admin.storage.Storage, {
+  get(_target, prop) {
+    const s = getAdminStorage();
+    const val = (s as unknown as Record<string | symbol, unknown>)[prop];
+    if (typeof val === 'function') return val.bind(s);
+    return val;
+  }
+});
