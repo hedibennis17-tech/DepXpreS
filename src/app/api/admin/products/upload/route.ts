@@ -2,7 +2,7 @@ export const runtime = "nodejs";
 
 import { NextRequest, NextResponse } from "next/server";
 import { handleAuthError, requirePermission } from "@/lib/auth/auth-guards";
-import { getAdminStorage } from "@/lib/firebase-admin";
+import { getAdminBucket } from "@/lib/firebase-admin";
 
 export async function POST(req: NextRequest) {
   try {
@@ -17,15 +17,14 @@ export async function POST(req: NextRequest) {
     const allowed = ["image/jpeg", "image/jpg", "image/png", "image/webp", "image/gif"];
     if (!allowed.includes(file.type)) return NextResponse.json({ ok: false, error: "Format non supporté (JPG, PNG, WEBP)." }, { status: 400 });
 
-    const storage = getAdminStorage();
-    const bucket = storage.bucket();
-
     const ext = file.name.split(".").pop() || "jpg";
     const fileName = `products/${Date.now()}-${Math.random().toString(36).slice(2)}.${ext}`;
     const bytes = await file.arrayBuffer();
     const buffer = Buffer.from(bytes);
 
+    const bucket = getAdminBucket();
     const fileRef = bucket.file(fileName);
+
     await fileRef.save(buffer, {
       metadata: { contentType: file.type },
       public: true,
@@ -33,8 +32,10 @@ export async function POST(req: NextRequest) {
 
     const imageUrl = `https://storage.googleapis.com/${bucket.name}/${fileName}`;
     return NextResponse.json({ ok: true, imageUrl });
+
   } catch (error) {
-    console.error("Upload error:", error);
-    return handleAuthError(error);
+    console.error("[upload] error:", error);
+    const msg = error instanceof Error ? error.message : "Erreur upload inconnue";
+    return NextResponse.json({ ok: false, error: msg }, { status: 500 });
   }
 }

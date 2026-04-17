@@ -34,6 +34,7 @@ const EMPTY_FORM = {
 
 export default function StoresCatalogPage() {
   const router = useRouter();
+  const [mounted, setMounted] = useState(false);
   const [items, setItems] = useState<ProductRow[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
@@ -65,6 +66,7 @@ export default function StoresCatalogPage() {
   }
 
   useEffect(() => {
+    setMounted(true);
     loadProducts();
     // Stores
     getDocs(collection(db, "stores"))
@@ -167,6 +169,8 @@ export default function StoresCatalogPage() {
       setUploadProgress("");
     }
   }
+
+  if (!mounted) return <div className="flex items-center justify-center h-48"><Loader2 className="h-8 w-8 animate-spin text-orange-500" /></div>;
 
   return (
     <div className="space-y-6">

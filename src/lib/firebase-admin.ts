@@ -80,6 +80,11 @@ export function getAdminStorage(): admin.storage.Storage {
   return admin.storage(app);
 }
 
+export function getAdminBucket() {
+  const bucketName = process.env.NEXT_PUBLIC_FIREBASE_STORAGE_BUCKET || "studio-1471071484-26917.firebasestorage.app";
+  return getAdminStorage().bucket(bucketName);
+}
+
 export const adminStorage = new Proxy({} as admin.storage.Storage, {
   get(_target, prop) {
     const s = getAdminStorage();
