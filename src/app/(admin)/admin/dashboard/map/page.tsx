@@ -5,6 +5,9 @@ import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { RefreshCw, Wifi, Package, MapPin, Truck, Navigation } from 'lucide-react';
+import dynamic from 'next/dynamic';
+
+const GoogleMapView = dynamic(() => import('@/components/maps/GoogleMapView'), { ssr: false, loading: () => <div className="flex items-center justify-center h-full"><div className="animate-spin rounded-full h-8 w-8 border-b-2 border-orange-500"></div></div> });
 import { cn } from '@/lib/utils';
 
 interface DriverLocation {
@@ -152,37 +155,22 @@ export default function DashboardMapPage() {
         <CardContent className="p-0">
           <div className="relative w-full bg-gradient-to-br from-blue-50 via-green-50 to-teal-50 dark:from-slate-800 dark:via-slate-700 dark:to-slate-800"
             style={{ height: '480px' }}>
-            {/* Grille de fond simulant une carte */}
-            <div className="absolute inset-0 opacity-10"
-              style={{
-                backgroundImage: 'linear-gradient(rgba(0,0,0,0.1) 1px, transparent 1px), linear-gradient(90deg, rgba(0,0,0,0.1) 1px, transparent 1px)',
-                backgroundSize: '40px 40px',
-              }}
+            <GoogleMapView
+              center={{ lat: 45.5514, lng: -73.6483 }}
+              zoom={11}
+              height="100%"
+              className="absolute inset-0"
+              markers={[
+                ...onlineDrivers.slice(0, 10).map(d => ({
+                  id: d.id,
+                  lat: d.lat || 45.5017 + (Math.random() - 0.5) * 0.1,
+                  lng: d.lng || -73.5673 + (Math.random() - 0.5) * 0.1,
+                  type: 'driver' as const,
+                  label: d.fullName || d.full_name || 'Chauffeur',
+                  status: d.isOnline ? 'online' : 'offline',
+                })),
+              ]}
             />
-
-            {/* Label de la carte */}
-            <div className="absolute top-4 left-4 bg-white/90 dark:bg-slate-800/90 rounded-lg px-3 py-2 shadow-md text-xs font-medium text-slate-700 dark:text-slate-300">
-              🗺️ Grand Montréal — OpenStreetMap
-            </div>
-
-            {/* Zones */}
-            {MONTREAL_ZONES.map((zone, i) => (
-              <div
-                key={zone.name}
-                className="absolute flex flex-col items-center gap-1"
-                style={{
-                  top: `${15 + i * 16}%`,
-                  left: `${20 + (i % 3) * 25}%`,
-                  transform: 'translate(-50%, -50%)',
-                }}
-              >
-                <div className="w-16 h-16 rounded-full bg-blue-100/60 dark:bg-blue-900/30 border border-blue-300/50 flex items-center justify-center">
-                  <span className="text-xs text-blue-600 dark:text-blue-400 font-medium text-center leading-tight px-1">
-                    {zone.name}
-                  </span>
-                </div>
-              </div>
-            ))}
 
             {/* Marqueurs chauffeurs en ligne */}
             {onlineDrivers.slice(0, 7).map((driver, i) => {
