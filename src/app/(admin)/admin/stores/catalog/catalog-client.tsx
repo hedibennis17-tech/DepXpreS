@@ -46,6 +46,9 @@ export default function StoresCatalogPage() {
   const [imageFile, setImageFile] = useState<File | null>(null);
   const [imagePreview, setImagePreview] = useState<string | null>(null);
   const [submitting, setSubmitting] = useState(false);
+  const [editingId, setEditingId] = useState<string | null>(null);
+  const [deleteId, setDeleteId] = useState<string | null>(null);
+  const [deleting, setDeleting] = useState(false);
   const [uploadProgress, setUploadProgress] = useState("");
   const [formError, setFormError] = useState("");
   const fileInputRef = useRef<HTMLInputElement>(null);
@@ -103,8 +106,46 @@ export default function StoresCatalogPage() {
   }
 
   function openModal() {
+    setEditingId(null);
     setForm({ ...EMPTY_FORM }); setImageFile(null); setImagePreview(null);
     setFormError(""); setUploadProgress(""); setModalOpen(true);
+  }
+
+  function openEdit(product: ProductRow) {
+    setEditingId(product.id);
+    setForm({
+      name: product.name || "",
+      description: product.description || "",
+      barcode: product.barcode || "",
+      price: String(product.price ?? ""),
+      stock: String(product.stock ?? ""),
+      storeId: product.storeId || "",
+      commerceTypeId: product.commerceTypeId || "none",
+      requiresAgeVerification: !!product.requiresAgeVerification,
+      isActive: product.isActive !== false,
+    });
+    setImageFile(null);
+    setImagePreview(product.imageUrl || null);
+    setFormError(""); setUploadProgress(""); setModalOpen(true);
+  }
+
+  async function handleDelete() {
+    if (!deleteId) return;
+    setDeleting(true);
+    try {
+      const res = await fetch(`/api/admin/products?productId=${deleteId}`, {
+        method: "DELETE",
+        credentials: "include",
+      });
+      const data = await res.json().catch(() => null);
+      if (!res.ok) throw new Error(data?.error || "Erreur suppression");
+      setDeleteId(null);
+      await loadProducts(true);
+    } catch (err) {
+      alert(err instanceof Error ? err.message : "Erreur");
+    } finally {
+      setDeleting(false);
+    }
   }
 
   async function handleSubmit() {
@@ -151,14 +192,26 @@ export default function StoresCatalogPage() {
         ...(imageUrl ? { imageUrl } : {}),
       };
 
-      const res = await fetch("/api/admin/products", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        credentials: "include",
-        body: JSON.stringify(payload),
-      });
+      let res;
+      if (editingId) {
+        // Mode édition: PATCH
+        res = await fetch("/api/admin/products", {
+          method: "PATCH",
+          headers: { "Content-Type": "application/json" },
+          credentials: "include",
+          body: JSON.stringify({ productId: editingId, updates: payload }),
+        });
+      } else {
+        // Mode création: POST
+        res = await fetch("/api/admin/products", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          credentials: "include",
+          body: JSON.stringify(payload),
+        });
+      }
       const data = await res.json().catch(() => null);
-      if (!res.ok) throw new Error(data?.error || "Erreur lors de la création.");
+      if (!res.ok) throw new Error(data?.error || "Erreur lors de l'enregistrement.");
 
       setModalOpen(false);
       await loadProducts(true);
@@ -226,10 +279,30 @@ export default function StoresCatalogPage() {
                 </div>
                 <div className="p-4 space-y-2">
                   <div className="flex items-start justify-between gap-2">
-                    <p className="font-semibold text-sm leading-tight line-clamp-2">{product.name || "Sans nom"}</p>
+                    <p className="font-semibold text-sm leading-tight line-clamp-2 flex-1">{product.name || "Sans nom"}</p>
                     <Badge className={product.isActive !== false ? "bg-green-100 text-green-800 shrink-0 text-xs" : "bg-gray-100 text-gray-600 shrink-0 text-xs"}>
                       {product.isActive !== false ? "Actif" : "Inactif"}
                     </Badge>
+                  </div>
+
+                  {/* Actions Edit / Delete */}
+                  <div className="flex items-center gap-2 pt-2 border-t">
+                    <Button
+                      variant="outline"
+                      size="sm"
+                      className="flex-1 h-8 text-xs gap-1.5"
+                      onClick={() => openEdit(product)}
+                    >
+                      <Edit className="h-3 w-3" /> Modifier
+                    </Button>
+                    <Button
+                      variant="outline"
+                      size="sm"
+                      className="flex-1 h-8 text-xs gap-1.5 text-red-600 hover:bg-red-50 hover:text-red-700 border-red-200"
+                      onClick={() => setDeleteId(product.id)}
+                    >
+                      <Trash2 className="h-3 w-3" /> Supprimer
+                    </Button>
                   </div>
                   {product.description && <p className="text-xs text-muted-foreground line-clamp-2">{product.description}</p>}
                   <div className="space-y-1 pt-1">
@@ -257,7 +330,7 @@ export default function StoresCatalogPage() {
           <DialogHeader>
             <DialogTitle className="flex items-center gap-2 text-lg">
               <Plus className="h-5 w-5 text-orange-500" />
-              Ajouter un article au catalogue
+              {editingId ? "Modifier l'article" : "Ajouter un article au catalogue"}
             </DialogTitle>
           </DialogHeader>
 
@@ -396,7 +469,36 @@ export default function StoresCatalogPage() {
             <Button className="bg-orange-500 hover:bg-orange-600 text-white gap-2" onClick={handleSubmit} disabled={submitting}>
               {submitting
                 ? <><Loader2 className="h-4 w-4 animate-spin" />Enregistrement...</>
-                : <><Plus className="h-4 w-4" />Ajouter l&apos;article</>}
+                : editingId
+                  ? <><Edit className="h-4 w-4" />Enregistrer les modifications</>
+                  : <><Plus className="h-4 w-4" />Ajouter l&apos;article</>}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      {/* Modal de confirmation suppression */}
+      <Dialog open={!!deleteId} onOpenChange={v => { if (!v && !deleting) setDeleteId(null); }}>
+        <DialogContent className="max-w-md">
+          <DialogHeader>
+            <DialogTitle className="flex items-center gap-2 text-lg text-red-600">
+              <Trash2 className="h-5 w-5" />
+              Supprimer cet article ?
+            </DialogTitle>
+          </DialogHeader>
+          <p className="text-sm text-muted-foreground py-2">
+            Cette action est irréversible. L&apos;article sera supprimé définitivement du catalogue.
+          </p>
+          <DialogFooter className="gap-2">
+            <Button variant="outline" onClick={() => setDeleteId(null)} disabled={deleting}>
+              Annuler
+            </Button>
+            <Button
+              className="bg-red-600 hover:bg-red-700 text-white gap-2"
+              onClick={handleDelete}
+              disabled={deleting}
+            >
+              {deleting ? <><Loader2 className="h-4 w-4 animate-spin" />Suppression...</> : <><Trash2 className="h-4 w-4" />Supprimer</>}
             </Button>
           </DialogFooter>
         </DialogContent>

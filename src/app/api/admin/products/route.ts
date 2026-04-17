@@ -116,27 +116,68 @@ export async function POST(req: NextRequest) {
   }
 }
 
+function checkAuth(req: NextRequest) {
+  const role = req.cookies.get("admin_role")?.value;
+  const token = req.cookies.get("admin_token")?.value;
+  return (role && ["super_admin","admin"].includes(role)) || !!token;
+}
+
 export async function PATCH(req: NextRequest) {
   try {
-    await requirePermission(req, "stores.write");
-
-    const body = await req.json();
-    const { productId, updates } = body;
-
-    if (!productId || !updates) {
-      return NextResponse.json(
-        { ok: false, error: "productId and updates required" },
-        { status: 400 }
-      );
+    if (!checkAuth(req)) {
+      return NextResponse.json({ ok:false, error:"Non autorisé" }, { status:401 });
     }
 
-    await adminDb.collection("products").doc(productId).update({
-      ...updates,
-      updatedAt: FieldValue.serverTimestamp(),
-    });
+    const body = await req.json();
+    const { productId, updates } = body || {};
 
-    return NextResponse.json({ ok: true });
+    if (!productId || !updates) {
+      return NextResponse.json({ ok:false, error:"productId et updates requis" }, { status:400 });
+    }
+
+    // Si storeId change, refresh storeName
+    if (updates.storeId) {
+      try {
+        const storeDoc = await adminDb.collection("stores").doc(updates.storeId).get();
+        if (storeDoc.exists) updates.storeName = (storeDoc.data()?.name as string) || "";
+      } catch {}
+    }
+
+    // Nettoyer les undefined
+    const clean: Record<string, unknown> = { updatedAt: FieldValue.serverTimestamp() };
+    for (const [k, v] of Object.entries(updates)) {
+      if (v !== undefined) clean[k] = v;
+    }
+
+    await adminDb.collection("products").doc(productId).update(clean);
+    return NextResponse.json({ ok:true });
+
   } catch (error) {
-    return handleAuthError(error);
+    const msg = error instanceof Error ? error.message : String(error);
+    console.error("[products PATCH]", msg);
+    return NextResponse.json({ ok:false, error: msg }, { status:500 });
+  }
+}
+
+export async function DELETE(req: NextRequest) {
+  try {
+    if (!checkAuth(req)) {
+      return NextResponse.json({ ok:false, error:"Non autorisé" }, { status:401 });
+    }
+
+    const { searchParams } = new URL(req.url);
+    const productId = searchParams.get("productId");
+
+    if (!productId) {
+      return NextResponse.json({ ok:false, error:"productId requis" }, { status:400 });
+    }
+
+    await adminDb.collection("products").doc(productId).delete();
+    return NextResponse.json({ ok:true });
+
+  } catch (error) {
+    const msg = error instanceof Error ? error.message : String(error);
+    console.error("[products DELETE]", msg);
+    return NextResponse.json({ ok:false, error: msg }, { status:500 });
   }
 }
