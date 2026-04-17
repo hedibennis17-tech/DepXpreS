@@ -1,12 +1,23 @@
 export const runtime = "nodejs";
 
 import { NextRequest, NextResponse } from "next/server";
-import { handleAuthError, requirePermission } from "@/lib/auth/auth-guards";
 import { getAdminBucket } from "@/lib/firebase-admin";
+
+function isAdminRequest(req: NextRequest): boolean {
+  // Vérifier le cookie admin_role (set par le login)
+  const adminRole = req.cookies.get("admin_role")?.value;
+  if (adminRole && ["super_admin", "admin"].includes(adminRole)) return true;
+
+  // Fallback: vérifier admin_token cookie existe
+  const adminToken = req.cookies.get("admin_token")?.value;
+  return !!adminToken;
+}
 
 export async function POST(req: NextRequest) {
   try {
-    await requirePermission(req, "stores.write");
+    if (!isAdminRequest(req)) {
+      return NextResponse.json({ ok: false, error: "Non autorisé." }, { status: 401 });
+    }
 
     const formData = await req.formData();
     const file = formData.get("file") as File | null;
@@ -27,13 +38,10 @@ export async function POST(req: NextRequest) {
     const bucket = getAdminBucket();
     const fileRef = bucket.file(fileName);
 
-    // Sauvegarder SANS public:true (évite les erreurs ACL/IAM)
     await fileRef.save(buffer, {
       metadata: { contentType: file.type },
     });
 
-    // Rendre le fichier accessible publiquement via Firebase Storage rules
-    // URL format standard Firebase Storage (pas besoin de makePublic)
     const bucketName = bucket.name;
     const encodedPath = encodeURIComponent(fileName);
     const imageUrl = `https://firebasestorage.googleapis.com/v0/b/${bucketName}/o/${encodedPath}?alt=media`;
