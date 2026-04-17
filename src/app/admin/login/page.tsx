@@ -124,8 +124,11 @@ function AdminLoginForm() {
       router.replace(redirect);
       router.refresh();
     } catch (err: unknown) {
-      const e = err as { code?: string };
-      setError(getUserFriendlyMessage(e.code || ""));
+      const e = err as { code?: string; message?: string };
+      const code = e.code || "";
+      const rawMsg = e.message || "";
+      // Afficher le vrai code d'erreur Firebase pour debug
+      setError(`${getUserFriendlyMessage(code)} [${code || rawMsg}]`);
       setPassword("");
     } finally {
       setLoading(false);
