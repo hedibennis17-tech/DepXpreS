@@ -14,7 +14,8 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from "@/components/ui/dialog";
 import {
   Plus, Search, RefreshCw, Package, ImageIcon, X, Loader2,
-  Store, Tag, Barcode, DollarSign, Layers, AlertCircle, ShieldAlert, LayoutGrid
+  Store, Tag, Barcode, DollarSign, Layers, AlertCircle, ShieldAlert, LayoutGrid,
+  Edit, Trash2
 } from "lucide-react";
 
 type ProductRow = {
