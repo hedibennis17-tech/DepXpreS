@@ -4,7 +4,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { adminAuth, adminDb } from "@/lib/firebase-admin";
 
 const ADMIN_ROLES = ["super_admin", "admin", "dispatcher", "agent"] as const;
-const SUPER_ADMIN_EMAILS = ["hedibennis17@gmail.com", "hedi@fastdep.ca"];
+const SUPER_ADMIN_EMAILS = ["hedi_bennis17@gmail.com", "hedibennis17@gmail.com", "hedi@fastdep.ca"];
 
 function getCookieOptions(maxAgeSeconds: number) {
   return {
