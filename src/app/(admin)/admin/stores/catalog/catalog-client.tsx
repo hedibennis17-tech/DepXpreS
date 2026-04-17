@@ -118,18 +118,33 @@ export default function StoresCatalogPage() {
     try {
       let imageUrl = "";
 
-      // Upload image via API server-side (bypass CORS)
+      // Upload image via Signed URL (2 étapes: 1. obtenir URL signée, 2. PUT direct)
       if (imageFile) {
-        setUploadProgress("📤 Upload de l'image en cours...");
-        const fd = new FormData();
-        fd.append("file", imageFile);
+        setUploadProgress("📤 Préparation de l'upload...");
+
+        // Étape 1: obtenir la signed URL depuis notre API
         const upRes = await fetch("/api/admin/products/upload", {
           method: "POST",
+          headers: { "Content-Type": "application/json" },
           credentials: "include",
-          body: fd,
+          body: JSON.stringify({
+            fileName: imageFile.name,
+            contentType: imageFile.type,
+          }),
         });
         const upData = await upRes.json().catch(() => null);
-        if (!upRes.ok) throw new Error(upData?.error || "Erreur lors de l'upload de l'image.");
+        if (!upRes.ok) throw new Error(upData?.error || "Erreur lors de la préparation de l'upload.");
+
+        setUploadProgress("📤 Upload de l'image en cours...");
+
+        // Étape 2: PUT direct vers la signed URL Google Storage (pas de CORS)
+        const putRes = await fetch(upData.signedUrl, {
+          method: "PUT",
+          headers: { "Content-Type": imageFile.type },
+          body: imageFile,
+        });
+        if (!putRes.ok) throw new Error("Erreur lors de l'upload vers le stockage.");
+
         imageUrl = upData.imageUrl || "";
         setUploadProgress("✅ Image uploadée");
       }
