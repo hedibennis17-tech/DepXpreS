@@ -35,13 +35,17 @@ export async function POST(req: NextRequest) {
     const bytes = await file.arrayBuffer();
     const buffer = Buffer.from(bytes);
 
+    console.log("[upload] Getting bucket...");
     const bucket = getAdminBucket();
+    console.log("[upload] Bucket name:", bucket.name);
     const fileRef = bucket.file(fileName);
 
+    console.log("[upload] Saving file:", fileName);
     await fileRef.save(buffer, {
       metadata: { contentType: file.type },
     });
 
+    console.log("[upload] File saved OK");
     const bucketName = bucket.name;
     const encodedPath = encodeURIComponent(fileName);
     const imageUrl = `https://firebasestorage.googleapis.com/v0/b/${bucketName}/o/${encodedPath}?alt=media`;
