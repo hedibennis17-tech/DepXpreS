@@ -4,7 +4,6 @@ import { Suspense, useState } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
 import {
   browserLocalPersistence,
-  browserSessionPersistence,
   setPersistence,
   signInWithEmailAndPassword,
   signOut,
@@ -24,40 +23,8 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Logo } from "@/components/logo";
 
-async function cleanFirebaseIndexedDB() {
-  try {
-    if (!indexedDB.databases) return;
-    const databases = await indexedDB.databases();
-    for (const db of databases) {
-      if (db.name && db.name.includes("firebase")) {
-        indexedDB.deleteDatabase(db.name);
-      }
-    }
-  } catch {
-    // ignore
-  }
-}
-
 async function robustSignIn(email: string, password: string) {
-  await cleanFirebaseIndexedDB();
-
-  try {
-    await signOut(auth);
-    await new Promise((resolve) => setTimeout(resolve, 100));
-  } catch {
-    // ignore
-  }
-
-  try {
-    await setPersistence(auth, browserLocalPersistence);
-  } catch {
-    try {
-      await setPersistence(auth, browserSessionPersistence);
-    } catch {
-      // ignore
-    }
-  }
-
+  try { await setPersistence(auth, browserLocalPersistence); } catch {}
   return signInWithEmailAndPassword(auth, email, password);
 }
 
@@ -125,10 +92,9 @@ function AdminLoginForm() {
       router.refresh();
     } catch (err: unknown) {
       const e = err as { code?: string; message?: string };
-      const code = e.code || "";
-      const rawMsg = e.message || "";
-      // Afficher le vrai code d'erreur Firebase pour debug
-      setError(`${getUserFriendlyMessage(code)} [${code || rawMsg}]`);
+      const code = e.code || "unknown";
+      const rawMsg = e.message || "Erreur inconnue";
+      setError(`[${code}] ${rawMsg}`);
       setPassword("");
     } finally {
       setLoading(false);
