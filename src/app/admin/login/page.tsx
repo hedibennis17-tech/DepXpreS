@@ -91,10 +91,8 @@ function AdminLoginForm() {
       router.replace(redirect);
       router.refresh();
     } catch (err: unknown) {
-      const e = err as { code?: string; message?: string };
-      const code = e.code || "unknown";
-      const rawMsg = e.message || "Erreur inconnue";
-      setError(`[${code}] ${rawMsg}`);
+      const e = err as { code?: string };
+      setError(getUserFriendlyMessage(e.code || ""));
       setPassword("");
     } finally {
       setLoading(false);

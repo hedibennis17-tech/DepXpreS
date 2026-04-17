@@ -18,7 +18,6 @@ const PUBLIC_ROUTES = [
   "/api/address/reverse",
   "/api/admin/test",
   "/api/admin/debug",
-  "/api/reset-pwd",
 ];
 
 const ADMIN_ROLES = ["super_admin", "admin", "dispatcher", "agent"] as const;
