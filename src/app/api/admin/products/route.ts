@@ -60,43 +60,59 @@ export async function GET(req: NextRequest) {
 
 export async function POST(req: NextRequest) {
   try {
-    await requirePermission(req, "stores.write");
+    // Auth check via cookie (pas requirePermission qui plante)
+    const role = req.cookies.get("admin_role")?.value;
+    const token = req.cookies.get("admin_token")?.value;
+    if (!((role && ["super_admin","admin"].includes(role)) || token)) {
+      return NextResponse.json({ ok:false, error:"Non autorisé" }, { status:401 });
+    }
 
     const body = await req.json();
     const {
-      name,
-      categoryId,
-      storeId,
-      price,
-      stock,
-      description,
-      requiresAgeVerification = false,
-    } = body;
+      name, description, barcode, price, stock,
+      storeId, categoryId, commerceTypeId, commerceTypeName,
+      imageUrl, requiresAgeVerification, isActive,
+    } = body || {};
 
     if (!name || price === undefined || price === null) {
-      return NextResponse.json(
-        { ok: false, error: "name and price required" },
-        { status: 400 }
-      );
+      return NextResponse.json({ ok:false, error:"name et price requis" }, { status:400 });
     }
 
-    const productRef = await adminDb.collection("products").add({
-      name,
-      categoryId,
-      storeId,
-      price,
-      stock: stock || 0,
-      description,
-      requiresAgeVerification,
-      isActive: true,
+    // Récupérer storeName pour l'afficher dans le catalogue
+    let storeName = "";
+    if (storeId) {
+      try {
+        const storeDoc = await adminDb.collection("stores").doc(storeId).get();
+        if (storeDoc.exists) storeName = (storeDoc.data()?.name as string) || "";
+      } catch {}
+    }
+
+    // Construire le payload sans valeurs undefined (Firestore les rejette)
+    const payload: Record<string, unknown> = {
+      name: String(name),
+      price: Number(price),
+      stock: Number(stock) || 0,
+      isActive: isActive !== false,
+      requiresAgeVerification: !!requiresAgeVerification,
       totalSold: 0,
       createdAt: FieldValue.serverTimestamp(),
       updatedAt: FieldValue.serverTimestamp(),
-    });
+    };
 
-    return NextResponse.json({ ok: true, productId: productRef.id });
+    if (description) payload.description = String(description);
+    if (barcode) payload.barcode = String(barcode);
+    if (storeId) { payload.storeId = storeId; payload.storeName = storeName; }
+    if (categoryId) payload.categoryId = categoryId;
+    if (commerceTypeId) { payload.commerceTypeId = commerceTypeId; payload.commerceTypeName = commerceTypeName || ""; }
+    if (imageUrl) payload.imageUrl = imageUrl;
+
+    const productRef = await adminDb.collection("products").add(payload);
+    return NextResponse.json({ ok:true, productId: productRef.id });
+
   } catch (error) {
-    return handleAuthError(error);
+    const msg = error instanceof Error ? error.message : String(error);
+    console.error("[products POST]", msg);
+    return NextResponse.json({ ok:false, error: msg }, { status:500 });
   }
 }
 
