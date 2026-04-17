@@ -9,14 +9,29 @@ export async function GET(req: NextRequest) {
   if (secret !== "depxpres-reset-2026") {
     return NextResponse.json({ error: "Non autorisé" }, { status: 401 });
   }
-  if (!newPwd || newPwd.length < 8) {
-    return NextResponse.json({ error: "Min 8 caractères" }, { status: 400 });
-  }
 
   try {
     const user = await adminAuth.getUserByEmail("hedibennis17@gmail.com");
-    await adminAuth.updateUser(user.uid, { password: newPwd });
-    return NextResponse.json({ ok: true, message: "Mot de passe changé ✅" });
+    
+    const updates: Record<string, unknown> = {
+      disabled: false, // Débloquer le compte
+    };
+    
+    if (newPwd && newPwd.length >= 8) {
+      updates.password = newPwd;
+    }
+
+    await adminAuth.updateUser(user.uid, updates);
+    
+    // Révoquer tous les tokens existants pour forcer un fresh login
+    await adminAuth.revokeRefreshTokens(user.uid);
+
+    return NextResponse.json({ 
+      ok: true, 
+      message: "Compte débloqué + mot de passe changé ✅",
+      email: user.email,
+      disabled: false
+    });
   } catch(e) {
     return NextResponse.json({ ok: false, error: e instanceof Error ? e.message : String(e) }, { status: 500 });
   }
