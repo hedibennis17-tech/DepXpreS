@@ -125,7 +125,7 @@ export default function StoreSignupPage() {
       const result = await res.json().catch(() => null);
 
       if (!res.ok) {
-        setError(result?.error || "Erreur lors de la création du compte.");
+        setError(result?.error || `Erreur ${res.status}: Réessayez`);
         return;
       }
 
