@@ -2,34 +2,10 @@
 
 import { useState } from "react";
 import { useRouter } from "next/navigation";
-import {
-  signInWithEmailAndPassword,
-  signOut,
-  setPersistence,
-  browserLocalPersistence,
-  browserSessionPersistence,
-} from "firebase/auth";
+import { signInWithEmailAndPassword, signOut } from "firebase/auth";
 
-async function cleanFirebaseIndexedDB() {
-  try {
-    if (!indexedDB.databases) return;
-    const dbs = await indexedDB.databases();
-    for (const db of dbs) {
-      if (db.name && db.name.includes('firebase')) indexedDB.deleteDatabase(db.name);
-    }
-  } catch { /* ok */ }
-}
 
-async function robustSignIn(email: string, password: string) {
-  await cleanFirebaseIndexedDB();
-  try { await signOut(auth); await new Promise(r => setTimeout(r, 100)); } catch { /* ok */ }
-  try { await setPersistence(auth, browserLocalPersistence); } catch {
-    try { await setPersistence(auth, browserSessionPersistence); } catch { /* ok */ }
-  }
-  return await signInWithEmailAndPassword(auth, email, password);
-}
-import { doc, getDoc } from "firebase/firestore";
-import { auth, db } from "@/lib/firebase";
+import { auth } from "@/lib/firebase";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -54,47 +30,48 @@ function StoreLoginForm() {
     setError("");
 
     try {
-      const cred = await robustSignIn(email, password);
-      const uid = cred.user.uid;
+      // 1. Sign in Firebase
+      const cred = await signInWithEmailAndPassword(auth, email, password);
+      const idToken = await cred.user.getIdToken();
 
-      // Vérifier le rôle dans app_users
-      const userDoc = await getDoc(doc(db, "app_users", uid));
-      if (!userDoc.exists()) {
-        throw new Error("Compte introuvable. Contactez l'administrateur.");
+      // 2. Appeler l'API server-side qui set le cookie httpOnly
+      const res = await fetch("/api/auth/store/login", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        credentials: "include",
+        body: JSON.stringify({ idToken }),
+      });
+
+      const data = await res.json().catch(() => null);
+
+      if (!res.ok) {
+        await signOut(auth).catch(() => {});
+        setError(data?.error || "Accès refusé.");
+        return;
       }
 
-      const userData = userDoc.data();
-      const role = userData.role || "";
+      // 3. Stocker dans localStorage pour l'app store
+      localStorage.setItem("storeId", data.storeId || cred.user.uid);
+      localStorage.setItem("storeUserRole", data.role || "store_owner");
+      localStorage.setItem("storeUserName", data.storeName || email);
 
-      // Accepter store_owner, store_manager, ou super_admin
-      if (!["store_owner", "store_manager", "super_admin"].includes(role)) {
-        throw new Error("Accès refusé. Ce portail est réservé aux commercants partenaires.");
-      }
-
-      // Stocker les infos du store dans localStorage pour l'app
-      const storeId = userData.storeId || userData.store_id || uid;
-      localStorage.setItem("storeId", storeId);
-      localStorage.setItem("storeUserRole", role);
-      localStorage.setItem("storeUserName", userData.displayName || userData.name || email);
-
-      // Set cookie pour que le middleware laisse passer
-      document.cookie = `store_session=${uid}:${role};path=/;max-age=${55*60}`;
-
-      // Vérifier si le store est approuvé
-      const storeStatus = userData.storeStatus || "pending";
-      if (storeStatus === "pending") {
-        router.push("/store/dashboard?pending=1");
+      // 4. Rediriger selon statut
+      if (data.storeStatus === "pending") {
+        router.push("/store/pending");
       } else {
         router.push("/store/dashboard");
       }
+      router.refresh();
+
     } catch (err: unknown) {
-      const msg = err instanceof Error ? err.message : "Erreur de connexion";
-      if (msg.includes("auth/invalid-credential") || msg.includes("auth/wrong-password") || msg.includes("auth/user-not-found")) {
+      const e = err as { code?: string };
+      const code = e.code || "";
+      if (code.includes("invalid-credential") || code.includes("wrong-password") || code.includes("user-not-found")) {
         setError("Email ou mot de passe incorrect.");
-      } else if (msg.includes("auth/too-many-requests")) {
+      } else if (code.includes("too-many-requests")) {
         setError("Trop de tentatives. Réessayez dans quelques minutes.");
       } else {
-        setError(msg);
+        setError("Erreur de connexion. Vérifiez vos informations.");
       }
     } finally {
       setLoading(false);
