@@ -2,9 +2,6 @@
 
 import { useState } from "react";
 import { useRouter } from "next/navigation";
-import { createUserWithEmailAndPassword } from "firebase/auth";
-import { doc, setDoc, serverTimestamp } from "firebase/firestore";
-import { auth, db } from "@/lib/firebase";
 import { COMMERCE_TYPES, COMMERCE_TYPE_GROUPS } from "@/lib/commerce-types";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -107,58 +104,36 @@ export default function StoreSignupPage() {
     setLoading(true);
 
     try {
-      // 1. Créer le compte Firebase Auth
-      const cred = await createUserWithEmailAndPassword(auth, data.email, data.password);
-      const uid = cred.user.uid;
-
-      // 2. Créer le document store dans Firestore
-      const storeRef = doc(db, "stores", uid);
-      await setDoc(storeRef, {
-        id: uid,
-        name: data.commerceName.trim(),
-        commerceTypeId: data.commerceTypeId,
-        commerceTypeName: data.commerceTypeName,
-        phone: data.phone.trim(),
-        address: data.address.trim(),
-        city: data.city.trim(),
-        postalCode: data.postalCode.trim(),
-        zoneName: data.zone,
-        ownerName: data.managerName.trim(),
-        ownerEmail: data.email.trim(),
-        status: "pending", // En attente de validation admin
-        isOpen: false,
-        rating: 0,
-        totalOrders: 0,
-        totalRevenue: 0,
-        createdAt: serverTimestamp(),
-        updatedAt: serverTimestamp(),
+      const res = await fetch("/api/auth/store/signup", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          commerceName: data.commerceName,
+          commerceTypeId: data.commerceTypeId,
+          commerceTypeName: data.commerceTypeName,
+          phone: data.phone,
+          address: data.address,
+          city: data.city,
+          postalCode: data.postalCode,
+          zone: data.zone,
+          managerName: data.managerName,
+          email: data.email,
+          password: data.password,
+        }),
       });
 
-      // 3. Créer le document app_users
-      await setDoc(doc(db, "app_users", uid), {
-        uid,
-        email: data.email.trim(),
-        role: "store_owner",
-        primary_role: "store_owner",
-        storeId: uid,
-        storeName: data.commerceName.trim(),
-        display_name: data.managerName.trim(),
-        status: "active",
-        createdAt: serverTimestamp(),
-      });
+      const result = await res.json().catch(() => null);
 
-      // 4. Rediriger vers le login store
+      if (!res.ok) {
+        setError(result?.error || "Erreur lors de la création du compte.");
+        return;
+      }
+
+      // Succès — rediriger vers login
       router.push("/store-login?registered=1");
 
-    } catch (e: unknown) {
-      const code = (e as { code?: string }).code || "";
-      if (code === "auth/email-already-in-use") {
-        setError("Ce courriel est déjà utilisé. Connectez-vous plutôt.");
-      } else if (code === "auth/weak-password") {
-        setError("Mot de passe trop faible.");
-      } else {
-        setError("Erreur lors de la création du compte. Réessayez.");
-      }
+    } catch {
+      setError("Erreur réseau. Vérifiez votre connexion et réessayez.");
     } finally {
       setLoading(false);
     }
