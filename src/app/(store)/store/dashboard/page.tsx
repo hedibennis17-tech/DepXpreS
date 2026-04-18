@@ -1,7 +1,7 @@
 "use client";
 
 import { useState, useEffect } from "react";
-import { useRouter, useSearchParams } from "next/navigation";
+import { useRouter } from "next/navigation";
 import { collection, query, where, orderBy, limit, onSnapshot, doc, updateDoc, serverTimestamp } from "firebase/firestore";
 import { db } from "@/lib/firebase";
 import { cn } from "@/lib/utils";
@@ -173,27 +173,6 @@ export default function StoreDashboardPage() {
     return (
       <div className="flex items-center justify-center h-64">
         <RefreshCw className="h-8 w-8 animate-spin text-orange-500" />
-      </div>
-    );
-  }
-
-  if (isPending) {
-    return (
-      <div className="flex flex-col items-center justify-center min-h-[60vh] text-center p-8">
-        <div className="w-20 h-20 rounded-full bg-yellow-100 flex items-center justify-center mb-6">
-          <span className="text-4xl">⏳</span>
-        </div>
-        <h1 className="text-2xl font-bold text-gray-900 mb-3">Compte en attente d&apos;approbation</h1>
-        <p className="text-gray-500 max-w-md mb-2">
-          Votre demande d&apos;inscription a bien été reçue. Notre équipe va valider votre commerce sous peu.
-        </p>
-        <p className="text-gray-400 text-sm">
-          Vous recevrez une notification par courriel dès que votre compte sera approuvé.
-        </p>
-        <div className="mt-8 p-4 bg-orange-50 border border-orange-200 rounded-xl max-w-sm">
-          <p className="text-orange-700 text-sm font-medium">📧 Une question ?</p>
-          <p className="text-orange-600 text-sm mt-1">Contactez-nous à <a href="mailto:support@fastdep.ca" className="underline">support@fastdep.ca</a></p>
-        </div>
       </div>
     );
   }
