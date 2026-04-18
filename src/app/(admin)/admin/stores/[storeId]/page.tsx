@@ -252,9 +252,25 @@ export default function StoreDetailPage() {
               </Button>
             </>
           ) : (
-            <Button size="sm" onClick={startEdit} variant="outline" className="gap-2">
-              <Edit2 className="h-4 w-4" /> Modifier
-            </Button>
+            <div className="flex items-center gap-2">
+              {store.status === "pending" && (
+                <Button
+                  size="sm"
+                  className="gap-2 bg-green-600 hover:bg-green-700 text-white"
+                  onClick={async () => {
+                    try {
+                      await updateDoc(doc(db, "stores", storeId), { status: "active", updatedAt: serverTimestamp() });
+                      await fetchStore();
+                    } catch {}
+                  }}
+                >
+                  <CheckCircle2 className="h-4 w-4" /> Approuver
+                </Button>
+              )}
+              <Button size="sm" onClick={startEdit} variant="outline" className="gap-2">
+                <Edit2 className="h-4 w-4" /> Modifier
+              </Button>
+            </div>
           )}
         </div>
       </div>

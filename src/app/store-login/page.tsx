@@ -72,13 +72,21 @@ function StoreLoginForm() {
       }
 
       // Stocker les infos du store dans localStorage pour l'app
-      if (userData.storeId || userData.store_id) {
-        localStorage.setItem("storeId", userData.storeId || userData.store_id);
-      }
+      const storeId = userData.storeId || userData.store_id || uid;
+      localStorage.setItem("storeId", storeId);
       localStorage.setItem("storeUserRole", role);
       localStorage.setItem("storeUserName", userData.displayName || userData.name || email);
 
-      router.push("/store/dashboard");
+      // Set cookie pour que le middleware laisse passer
+      document.cookie = `store_session=${uid}:${role};path=/;max-age=${55*60}`;
+
+      // Vérifier si le store est approuvé
+      const storeStatus = userData.storeStatus || "pending";
+      if (storeStatus === "pending") {
+        router.push("/store/dashboard?pending=1");
+      } else {
+        router.push("/store/dashboard");
+      }
     } catch (err: unknown) {
       const msg = err instanceof Error ? err.message : "Erreur de connexion";
       if (msg.includes("auth/invalid-credential") || msg.includes("auth/wrong-password") || msg.includes("auth/user-not-found")) {
