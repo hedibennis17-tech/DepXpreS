@@ -43,7 +43,7 @@ const STATUS_LABELS: Record<string, string> = {
 export default function StoreDashboardPage() {
   const router = useRouter();
   const [storeId, setStoreId] = useState<string>("");
-  const [storeName, setStoreName] = useState<string>("Mon Dépanneur");
+  const [storeName, setStoreName] = useState<string>("Mon Commerce");
   const [isOpen, setIsOpen] = useState(true);
   const [togglingOpen, setTogglingOpen] = useState(false);
   const [recentOrders, setRecentOrders] = useState<Order[]>([]);
@@ -120,7 +120,7 @@ export default function StoreDashboardPage() {
     const storeUnsub = onSnapshot(doc(db, "stores", storeId), (snap) => {
       if (snap.exists()) {
         const data = snap.data();
-        setStoreName(data.name || "Mon Dépanneur");
+        setStoreName(data.name || "Mon Commerce");
         setIsOpen(data.isOpen === true);
         setStats(prev => ({ ...prev, avgRating: data.rating || 0 }));
       }
@@ -147,16 +147,16 @@ export default function StoreDashboardPage() {
     }
   };
 
-  // Aucun dépanneur sélectionné
+  // Aucun commerce sélectionné
   if (noStore) {
     return (
       <div className="flex flex-col items-center justify-center min-h-[60vh] text-center px-4">
         <div className="w-16 h-16 rounded-2xl bg-orange-100 flex items-center justify-center mb-4">
           <Store className="h-8 w-8 text-orange-500" />
         </div>
-        <h2 className="text-xl font-bold text-gray-900 mb-2">Aucun dépanneur sélectionné</h2>
+        <h2 className="text-xl font-bold text-gray-900 mb-2">Aucun commerce sélectionné</h2>
         <p className="text-gray-500 text-sm max-w-xs mb-6">
-          Vous êtes connecté en tant que Super Admin. Utilisez le menu de gauche pour choisir un dépanneur à gérer.
+          Vous êtes connecté en tant que Super Admin. Utilisez le menu de gauche pour choisir un commerce à gérer.
         </p>
         <button
           onClick={() => window.location.reload()}

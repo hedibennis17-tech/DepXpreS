@@ -8,6 +8,7 @@ const PUBLIC_ROUTES = [
   "/driver/signup",
   "/admin/login",
   "/store-login",
+  "/store-signup",
   "/api/auth/client/signup",
   "/api/auth/driver/signup",
   "/api/auth/login",

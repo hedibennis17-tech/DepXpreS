@@ -34,9 +34,14 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Store, Loader2, AlertCircle, Eye, EyeOff } from "lucide-react";
+import Link from "next/link";
+import { useSearchParams } from "next/navigation";
+import { Suspense } from "react";
 
-export default function StoreLoginPage() {
+function StoreLoginForm() {
   const router = useRouter();
+  const searchParams = useSearchParams();
+  const registered = searchParams.get("registered") === "1";
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [showPassword, setShowPassword] = useState(false);
@@ -63,7 +68,7 @@ export default function StoreLoginPage() {
 
       // Accepter store_owner, store_manager, ou super_admin
       if (!["store_owner", "store_manager", "super_admin"].includes(role)) {
-        throw new Error("Accès refusé. Ce portail est réservé aux propriétaires de dépanneurs.");
+        throw new Error("Accès refusé. Ce portail est réservé aux commercants partenaires.");
       }
 
       // Stocker les infos du store dans localStorage pour l'app
@@ -96,7 +101,7 @@ export default function StoreLoginPage() {
           <div className="inline-flex items-center justify-center w-16 h-16 rounded-2xl bg-orange-500 mb-4 shadow-lg">
             <Store className="h-8 w-8 text-white" />
           </div>
-          <h1 className="text-2xl font-bold text-gray-900">Espace Dépanneur</h1>
+          <h1 className="text-2xl font-bold text-gray-900">Espace Commercants Partenaires</h1>
           <p className="text-gray-500 mt-1 text-sm">Connectez-vous pour gérer votre dépanneur</p>
         </div>
 
@@ -164,7 +169,18 @@ export default function StoreLoginPage() {
             </Button>
           </form>
 
-          <div className="mt-6 pt-5 border-t text-center">
+          {registered && (
+            <div className="mb-4 p-3 rounded-lg bg-green-50 border border-green-200 text-green-700 text-sm text-center">
+              ✅ Compte créé avec succès ! Connectez-vous ci-dessous.
+            </div>
+          )}
+          <div className="mt-6 pt-5 border-t text-center space-y-2">
+            <p className="text-sm text-gray-500">
+              Pas encore partenaire ?{" "}
+              <Link href="/store-signup" className="text-orange-500 hover:underline font-medium">
+                Créer votre espace
+              </Link>
+            </p>
             <p className="text-xs text-gray-400">
               Problème de connexion ?{" "}
               <a href="mailto:support@fastdep.ca" className="text-orange-500 hover:underline">
@@ -183,5 +199,13 @@ export default function StoreLoginPage() {
         </p>
       </div>
     </div>
+  );
+}
+
+export default function StoreLoginPage() {
+  return (
+    <Suspense fallback={<div className="min-h-screen bg-gradient-to-br from-orange-50 to-amber-50 flex items-center justify-center"><div className="animate-spin rounded-full h-8 w-8 border-b-2 border-orange-500"></div></div>}>
+      <StoreLoginForm />
+    </Suspense>
   );
 }

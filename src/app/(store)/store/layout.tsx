@@ -83,7 +83,7 @@ export default function StoreAppLayout({ children }: { children: React.ReactNode
           if (!storeName && storeId) {
             const storeDoc = await getDoc(doc(db, "stores", storeId));
             if (storeDoc.exists()) {
-              storeName = storeDoc.data().name || "Mon Dépanneur";
+              storeName = storeDoc.data().name || "Mon Commerce";
             }
           }
 
@@ -98,7 +98,7 @@ export default function StoreAppLayout({ children }: { children: React.ReactNode
           if (storeId) {
             const storeDoc = await getDoc(doc(db, "stores", storeId));
             if (storeDoc.exists()) {
-              storeName = storeDoc.data().name || "Mon Dépanneur";
+              storeName = storeDoc.data().name || "Mon Commerce";
             }
           }
         }
@@ -107,7 +107,7 @@ export default function StoreAppLayout({ children }: { children: React.ReactNode
 
         setUser({
           name: firebaseUser.displayName || firebaseUser.email || "Admin",
-          storeName: storeName || (storeId ? "Mon Dépanneur" : "Choisir un dépanneur"),
+          storeName: storeName || (storeId ? "Mon Commerce" : "Choisir un commerce"),
           storeId,
           role,
           isSuperAdmin,
@@ -131,7 +131,7 @@ export default function StoreAppLayout({ children }: { children: React.ReactNode
         const storeId = localStorage.getItem("storeId") || "";
         setUser({
           name: firebaseUser.displayName || firebaseUser.email || "Admin",
-          storeName: storeId ? "Mon Dépanneur" : "Choisir un dépanneur",
+          storeName: storeId ? "Mon Commerce" : "Choisir un commerce",
           storeId,
           role: "super_admin",
           isSuperAdmin: true,
@@ -185,7 +185,7 @@ export default function StoreAppLayout({ children }: { children: React.ReactNode
             <Store className="h-6 w-6 text-white" />
           </div>
           <div className="animate-spin rounded-full h-6 w-6 border-b-2 border-orange-500 mx-auto mt-2"></div>
-          <p className="text-sm text-gray-500 mt-3">Chargement de l&apos;espace dépanneur...</p>
+          <p className="text-sm text-gray-500 mt-3">Chargement de l&apos;espace commercants partenaires...</p>
         </div>
       </div>
     );
@@ -205,9 +205,9 @@ export default function StoreAppLayout({ children }: { children: React.ReactNode
             <div className="w-14 h-14 rounded-2xl bg-white/20 flex items-center justify-center mx-auto mb-3">
               <Store className="h-7 w-7 text-white" />
             </div>
-            <h1 className="text-xl font-bold">Choisir un dépanneur</h1>
+            <h1 className="text-xl font-bold">Choisir un commerce</h1>
             <p className="text-orange-100 text-sm mt-1">
-              Bonjour {user?.name} — Sélectionnez le dépanneur à gérer
+              Bonjour {user?.name} — Sélectionnez le commerce à gérer
             </p>
           </div>
 
@@ -216,7 +216,7 @@ export default function StoreAppLayout({ children }: { children: React.ReactNode
               <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-gray-400" />
               <input
                 type="text"
-                placeholder="Rechercher un dépanneur..."
+                placeholder="Rechercher un commerce..."
                 value={storeSearch}
                 onChange={e => setStoreSearch(e.target.value)}
                 className="w-full pl-9 pr-4 py-2.5 border rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-orange-300"
@@ -227,7 +227,7 @@ export default function StoreAppLayout({ children }: { children: React.ReactNode
             <div className="space-y-2 max-h-80 overflow-y-auto">
               {filtered.length === 0 ? (
                 <p className="text-center text-gray-400 text-sm py-6">
-                  {stores.length === 0 ? "Chargement des dépanneurs..." : "Aucun dépanneur trouvé"}
+                  {stores.length === 0 ? "Chargement des commerces..." : "Aucun commerce trouvé"}
                 </p>
               ) : (
                 filtered.map(store => (
@@ -302,7 +302,7 @@ export default function StoreAppLayout({ children }: { children: React.ReactNode
               <Store className="h-5 w-5 text-white" />
             </div>
             <div className="min-w-0 flex-1">
-              <p className="font-bold text-sm truncate">{user?.storeName || "Mon Dépanneur"}</p>
+              <p className="font-bold text-sm truncate">{user?.storeName || "Mon Commerce"}</p>
               <p className="text-xs text-gray-400 truncate">{user?.name}</p>
             </div>
             <button
@@ -325,7 +325,7 @@ export default function StoreAppLayout({ children }: { children: React.ReactNode
                 className="w-full flex items-center gap-2 px-3 py-2 rounded-lg bg-gray-800 hover:bg-gray-700 text-xs text-gray-300 transition-colors"
               >
                 <ChevronDown className="h-3 w-3" />
-                Changer de dépanneur
+                Changer de commerce
               </button>
 
               {showStorePicker && (
@@ -418,7 +418,7 @@ export default function StoreAppLayout({ children }: { children: React.ReactNode
             <div className="w-7 h-7 rounded-lg bg-orange-500 flex items-center justify-center flex-shrink-0">
               <Store className="h-4 w-4 text-white" />
             </div>
-            <span className="font-semibold text-sm truncate">{user?.storeName || "Mon Dépanneur"}</span>
+            <span className="font-semibold text-sm truncate">{user?.storeName || "Mon Commerce"}</span>
           </div>
         </header>
 

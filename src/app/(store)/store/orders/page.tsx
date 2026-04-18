@@ -124,7 +124,7 @@ export default function StoreOrdersPage() {
       await updateDoc(doc(db, "orders", orderId), {
         status: "cancelled",
         cancelledAt: serverTimestamp(),
-        cancelReason: "Annulée par le dépanneur",
+        cancelReason: "Annulée par le commerce",
         updatedAt: serverTimestamp(),
       });
     } catch (e) {
