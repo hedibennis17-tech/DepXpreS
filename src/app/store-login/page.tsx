@@ -46,7 +46,7 @@ function StoreLoginForm() {
 
       if (!res.ok) {
         await signOut(auth).catch(() => {});
-        setError(data?.error || "Accès refusé.");
+        setError(`[${res.status}] ${data?.error || 'Erreur inconnue'}`);
         return;
       }
 
@@ -71,7 +71,7 @@ function StoreLoginForm() {
       } else if (code.includes("too-many-requests")) {
         setError("Trop de tentatives. Réessayez dans quelques minutes.");
       } else {
-        setError("Erreur de connexion. Vérifiez vos informations.");
+        setError(`[${code}] ${(err as {message?:string}).message || 'Erreur inconnue'}`);
       }
     } finally {
       setLoading(false);
