@@ -1,38 +1,34 @@
 "use client";
 
 import { useState, useEffect, useRef } from "react";
-import { collection, query, where, onSnapshot, doc, updateDoc, serverTimestamp, addDoc } from "firebase/firestore";
+import {
+  collection, query, where, onSnapshot,
+  doc, updateDoc, serverTimestamp, addDoc, getDoc
+} from "firebase/firestore";
 import { db } from "@/lib/firebase";
-import { TAXONOMY } from "@/lib/taxonomy";
+import { TAXONOMY, getCategoriesByCommerceSlug } from "@/lib/taxonomy";
+import type { Category, SubCategory } from "@/lib/taxonomy";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
-import { Badge } from "@/components/ui/badge";
 import { Switch } from "@/components/ui/switch";
+import { Badge } from "@/components/ui/badge";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from "@/components/ui/dialog";
 import {
-  Package, Plus, Search, Edit2, RefreshCw, Trash2,
-  DollarSign, ImageIcon, X, Loader2, AlertCircle,
-  ShieldAlert, Layers, Check
+  Package, Plus, Search, Edit2, Trash2, RefreshCw,
+  ImageIcon, X, Loader2, AlertCircle, ShieldAlert, Check
 } from "lucide-react";
 
 interface Product {
-  id: string;
-  name: string;
-  price: number;
-  description?: string;
-  isAvailable?: boolean;
-  stock?: number;
-  imageUrl?: string;
-  categoryId?: string;
-  categoryName?: string;
-  subcategoryId?: string;
-  subcategoryName?: string;
+  id: string; name: string; price: number;
+  description?: string; isAvailable?: boolean; stock?: number;
+  imageUrl?: string; categoryId?: string; categoryName?: string;
+  subcategoryId?: string; subcategoryName?: string;
   requiresAgeVerification?: boolean;
 }
 
-const EMPTY_FORM = {
+const EMPTY = {
   name: "", price: "", description: "", stock: "",
   categoryId: "", subcategoryId: "",
   requiresAgeVerification: false, isAvailable: true,
@@ -40,40 +36,49 @@ const EMPTY_FORM = {
 
 export default function CatalogContent() {
   const [storeId, setStoreId] = useState("");
-  const [commerceTypeSlug, setCommerceTypeSlug] = useState("");
+  const [categories, setCategories] = useState<Category[]>([]);
+  const [subcategories, setSubcategories] = useState<SubCategory[]>([]);
   const [products, setProducts] = useState<Product[]>([]);
   const [loading, setLoading] = useState(true);
   const [search, setSearch] = useState("");
-
-  // Modal
   const [modalOpen, setModalOpen] = useState(false);
   const [editingId, setEditingId] = useState<string | null>(null);
-  const [form, setForm] = useState({ ...EMPTY_FORM });
+  const [form, setForm] = useState({ ...EMPTY });
   const [imageFile, setImageFile] = useState<File | null>(null);
   const [imagePreview, setImagePreview] = useState<string | null>(null);
   const [saving, setSaving] = useState(false);
   const [uploadProgress, setUploadProgress] = useState("");
   const [formError, setFormError] = useState("");
-  const fileInputRef = useRef<HTMLInputElement>(null);
-
-  // Supprimer
   const [deleteId, setDeleteId] = useState<string | null>(null);
   const [deleting, setDeleting] = useState(false);
+  const fileInputRef = useRef<HTMLInputElement>(null);
 
-  // Taxonomie basée sur le type de commerce du store
-  const commerceType = TAXONOMY.find(ct => ct.slug === commerceTypeSlug) || TAXONOMY[0];
-  const categories = commerceType?.categories || [];
-  const subcategories = categories.find(c => c.id === form.categoryId)?.subcategories || [];
-
+  // Charger storeId + commerceTypeSlug depuis Firestore
   useEffect(() => {
     const sid = localStorage.getItem("storeId") || "";
     setStoreId(sid);
-    // Récupérer le type de commerce depuis localStorage ou Firestore
-    // Pour l'instant on prend le premier commerce type disponible
-    // TODO: connecter au vrai commerceTypeSlug du store
-    setCommerceTypeSlug("depanneur-epicerie-de-quartier");
+    if (!sid) return;
+
+    // Lire le type de commerce depuis Firestore
+    getDoc(doc(db, "stores", sid)).then(snap => {
+      if (!snap.exists()) return;
+      const data = snap.data();
+      const slug = data.commerceTypeSlug || data.commerceTypeId || "depanneur-epicerie";
+      const cats = getCategoriesByCommerceSlug(slug);
+      // Si pas de match exact, prendre toutes les catégories de tous les types
+      setCategories(cats.length > 0 ? cats : TAXONOMY.flatMap(ct => ct.categories));
+    }).catch(() => {
+      setCategories(TAXONOMY.flatMap(ct => ct.categories));
+    });
   }, []);
 
+  // Mettre à jour les sous-catégories quand la catégorie change
+  useEffect(() => {
+    const cat = categories.find(c => c.id === form.categoryId);
+    setSubcategories(cat?.subcategories || []);
+  }, [form.categoryId, categories]);
+
+  // Écouter les produits du store
   useEffect(() => {
     if (!storeId) return;
     const q = query(collection(db, "products"), where("storeId", "==", storeId));
@@ -91,7 +96,7 @@ export default function CatalogContent() {
 
   function openAdd() {
     setEditingId(null);
-    setForm({ ...EMPTY_FORM });
+    setForm({ ...EMPTY });
     setImageFile(null); setImagePreview(null);
     setFormError(""); setUploadProgress("");
     setModalOpen(true);
@@ -126,12 +131,9 @@ export default function CatalogContent() {
     if (!form.name.trim()) { setFormError("Nom requis."); return; }
     const price = parseFloat(form.price);
     if (isNaN(price) || price < 0) { setFormError("Prix invalide."); return; }
-
     setSaving(true);
     try {
       let imageUrl = imagePreview && !imageFile ? imagePreview : "";
-
-      // Upload image si nouvelle
       if (imageFile) {
         setUploadProgress("📤 Upload image...");
         const fd = new FormData();
@@ -147,15 +149,12 @@ export default function CatalogContent() {
 
       const cat = categories.find(c => c.id === form.categoryId);
       const sub = subcategories.find(s => s.id === form.subcategoryId);
-
       const payload: Record<string, unknown> = {
-        storeId,
-        name: form.name.trim(),
-        price,
+        storeId, name: form.name.trim(), price,
         description: form.description.trim(),
         stock: parseInt(form.stock) || 0,
         isAvailable: form.isAvailable,
-        requiresAgeVerification: form.requiresAgeVerification || !!(cat?.requires_age_check),
+        requiresAgeVerification: form.requiresAgeVerification || !!cat?.requires_age_check,
         updatedAt: serverTimestamp(),
       };
       if (cat) { payload.categoryId = cat.id; payload.categoryName = cat.name; }
@@ -168,7 +167,6 @@ export default function CatalogContent() {
         payload.createdAt = serverTimestamp();
         await addDoc(collection(db, "products"), payload);
       }
-
       setModalOpen(false);
     } catch (e) {
       setFormError(e instanceof Error ? e.message : "Erreur");
@@ -201,7 +199,7 @@ export default function CatalogContent() {
         <div>
           <h1 className="text-2xl font-bold text-gray-900">Mon catalogue</h1>
           <p className="text-gray-500 text-sm mt-0.5">
-            {products.length} produit(s) — {products.filter(p => p.isAvailable !== false).length} disponibles
+            {products.filter(p => p.isAvailable !== false).length} disponibles sur {products.length} articles
           </p>
         </div>
         <Button onClick={openAdd} className="bg-orange-500 hover:bg-orange-600 text-white gap-2">
@@ -212,7 +210,7 @@ export default function CatalogContent() {
       {/* Recherche */}
       <div className="relative">
         <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-gray-400" />
-        <Input placeholder="Rechercher..." value={search}
+        <Input placeholder="Rechercher un article..." value={search}
           onChange={e => setSearch(e.target.value)} className="pl-9" />
       </div>
 
@@ -230,29 +228,19 @@ export default function CatalogContent() {
       ) : (
         <div className="space-y-2">
           {filtered.map(p => (
-            <div key={p.id} className="bg-white rounded-2xl border shadow-sm overflow-hidden">
+            <div key={p.id} className="bg-white rounded-2xl border shadow-sm">
               <div className="flex items-center gap-4 p-4">
-                {/* Image */}
                 <div className="w-14 h-14 rounded-xl overflow-hidden bg-orange-50 flex-shrink-0 flex items-center justify-center">
                   {p.imageUrl
-                    // eslint-disable-next-line @next/next/no-img-element
-                    ? <img src={p.imageUrl} alt={p.name} className="w-full h-full object-cover" />
+                    ? <img src={p.imageUrl} alt={p.name} className="w-full h-full object-cover" /> // eslint-disable-line
                     : <Package className="h-6 w-6 text-orange-300" />}
                 </div>
-
-                {/* Infos */}
                 <div className="flex-1 min-w-0">
                   <div className="flex items-center gap-2 flex-wrap">
                     <p className="font-semibold text-sm truncate">{p.name}</p>
-                    {p.categoryName && (
-                      <Badge variant="outline" className="text-xs text-gray-500">{p.categoryName}</Badge>
-                    )}
-                    {p.subcategoryName && (
-                      <Badge variant="outline" className="text-xs text-blue-500">{p.subcategoryName}</Badge>
-                    )}
-                    {p.requiresAgeVerification && (
-                      <Badge className="text-xs bg-red-100 text-red-700">18+</Badge>
-                    )}
+                    {p.categoryName && <Badge variant="outline" className="text-xs text-gray-500">{p.categoryName}</Badge>}
+                    {p.subcategoryName && <Badge variant="outline" className="text-xs text-blue-500">{p.subcategoryName}</Badge>}
+                    {p.requiresAgeVerification && <Badge className="text-xs bg-red-100 text-red-700">18+</Badge>}
                   </div>
                   <div className="flex items-center gap-3 mt-1">
                     <span className="text-sm font-bold text-orange-500">${(p.price || 0).toFixed(2)}</span>
@@ -263,18 +251,14 @@ export default function CatalogContent() {
                     )}
                   </div>
                 </div>
-
-                {/* Actions */}
                 <div className="flex items-center gap-2 flex-shrink-0">
-                  <Switch
-                    checked={p.isAvailable !== false}
+                  <Switch checked={p.isAvailable !== false}
                     onCheckedChange={async () => {
                       await updateDoc(doc(db, "products", p.id), {
                         isAvailable: p.isAvailable === false, updatedAt: serverTimestamp()
                       });
                     }}
-                    className="data-[state=checked]:bg-green-500"
-                  />
+                    className="data-[state=checked]:bg-green-500" />
                   <button onClick={() => openEdit(p)}
                     className="p-1.5 rounded-lg hover:bg-gray-100 text-gray-400 hover:text-gray-700">
                     <Edit2 className="h-4 w-4" />
@@ -290,12 +274,12 @@ export default function CatalogContent() {
         </div>
       )}
 
-      {/* ══ MODAL Ajouter / Modifier ════════════════════════════════ */}
+      {/* ── MODAL Ajout / Modification ── */}
       <Dialog open={modalOpen} onOpenChange={v => { if (!saving) setModalOpen(v); }}>
         <DialogContent className="max-w-lg max-h-[90vh] overflow-y-auto">
           <DialogHeader>
             <DialogTitle className="flex items-center gap-2">
-              <Plus className="h-5 w-5 text-orange-500" />
+              <Package className="h-5 w-5 text-orange-500" />
               {editingId ? "Modifier l'article" : "Ajouter un article"}
             </DialogTitle>
           </DialogHeader>
@@ -308,17 +292,16 @@ export default function CatalogContent() {
             )}
             {uploadProgress && !formError && (
               <div className="flex items-center gap-2 p-3 rounded-lg bg-blue-50 border border-blue-200 text-blue-700 text-sm">
-                <Loader2 className="h-4 w-4 animate-spin" />{uploadProgress}
+                <Loader2 className="h-4 w-4 animate-spin shrink-0" />{uploadProgress}
               </div>
             )}
 
-            {/* Image */}
+            {/* Photo */}
             <div>
               <Label className="text-sm font-medium mb-2 block">Photo de l&apos;article</Label>
               {imagePreview ? (
-                <div className="relative w-full aspect-video rounded-xl overflow-hidden border bg-gray-50">
-                  {/* eslint-disable-next-line @next/next/no-img-element */}
-                  <img src={imagePreview} alt="preview" className="w-full h-full object-cover" />
+                <div className="relative w-full h-40 rounded-xl overflow-hidden border bg-gray-50">
+                  <img src={imagePreview} alt="preview" className="w-full h-full object-cover" /> {/* eslint-disable-line */}
                   <button onClick={() => { setImageFile(null); setImagePreview(null); }}
                     className="absolute top-2 right-2 bg-black/60 text-white rounded-full p-1">
                     <X className="h-3.5 w-3.5" />
@@ -326,10 +309,10 @@ export default function CatalogContent() {
                 </div>
               ) : (
                 <button onClick={() => fileInputRef.current?.click()}
-                  className="w-full aspect-video rounded-xl border-2 border-dashed border-gray-200 flex flex-col items-center justify-center gap-2 text-gray-400 hover:border-orange-400 hover:text-orange-500 transition-colors">
+                  className="w-full h-40 rounded-xl border-2 border-dashed border-gray-200 flex flex-col items-center justify-center gap-2 text-gray-400 hover:border-orange-400 hover:text-orange-500 transition-colors">
                   <ImageIcon className="h-8 w-8" />
                   <span className="text-sm">Cliquer pour ajouter une photo</span>
-                  <span className="text-xs">JPG, PNG — max 5 Mo</span>
+                  <span className="text-xs">JPG, PNG, WEBP — max 5 Mo</span>
                 </button>
               )}
               <input ref={fileInputRef} type="file" accept="image/*" onChange={onImageChange} className="hidden" />
@@ -338,33 +321,36 @@ export default function CatalogContent() {
             {/* Nom */}
             <div>
               <Label className="text-sm font-medium">Nom de l&apos;article *</Label>
-              <Input placeholder="ex: Coca-Cola 500ml, Baguette tradition..."
+              <Input placeholder="ex: Coca-Cola 500ml, Bouquet roses rouges..."
                 value={form.name} onChange={e => setForm(f => ({ ...f, name: e.target.value }))} className="mt-1" />
             </div>
 
-            {/* Catégorie + Sous-catégorie */}
-            <div className="grid grid-cols-2 gap-3">
-              <div>
-                <Label className="text-sm font-medium">Catégorie</Label>
-                <Select value={form.categoryId} onValueChange={v => setForm(f => ({ ...f, categoryId: v, subcategoryId: "" }))}>
-                  <SelectTrigger className="mt-1">
-                    <SelectValue placeholder="Sélectionner..." />
-                  </SelectTrigger>
-                  <SelectContent className="max-h-60">
-                    {categories.map(c => (
-                      <SelectItem key={c.id} value={c.id}>
-                        {c.requires_age_check ? "🔞 " : ""}{c.name}
-                      </SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
-              </div>
+            {/* Catégorie */}
+            <div>
+              <Label className="text-sm font-medium">Catégorie</Label>
+              <Select value={form.categoryId}
+                onValueChange={v => setForm(f => ({ ...f, categoryId: v, subcategoryId: "" }))}>
+                <SelectTrigger className="mt-1">
+                  <SelectValue placeholder="Sélectionner une catégorie..." />
+                </SelectTrigger>
+                <SelectContent className="max-h-64">
+                  {categories.map(c => (
+                    <SelectItem key={c.id} value={c.id}>
+                      {c.requires_age_check ? "🔞 " : ""}{c.name}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </div>
+
+            {/* Sous-catégorie */}
+            {subcategories.length > 0 && (
               <div>
                 <Label className="text-sm font-medium">Sous-catégorie</Label>
-                <Select value={form.subcategoryId} onValueChange={v => setForm(f => ({ ...f, subcategoryId: v }))}
-                  disabled={!form.categoryId}>
+                <Select value={form.subcategoryId}
+                  onValueChange={v => setForm(f => ({ ...f, subcategoryId: v }))}>
                   <SelectTrigger className="mt-1">
-                    <SelectValue placeholder={form.categoryId ? "Sélectionner..." : "Choisir catégorie"} />
+                    <SelectValue placeholder="Sélectionner une sous-catégorie..." />
                   </SelectTrigger>
                   <SelectContent className="max-h-60">
                     {subcategories.map(s => (
@@ -373,7 +359,7 @@ export default function CatalogContent() {
                   </SelectContent>
                 </Select>
               </div>
-            </div>
+            )}
 
             {/* Prix + Stock */}
             <div className="grid grid-cols-2 gap-3">
@@ -392,7 +378,8 @@ export default function CatalogContent() {
             {/* Description */}
             <div>
               <Label className="text-sm font-medium">Description</Label>
-              <textarea value={form.description} rows={2} placeholder="Description courte..."
+              <textarea rows={2} placeholder="Description courte de l'article..."
+                value={form.description}
                 onChange={e => setForm(f => ({ ...f, description: e.target.value }))}
                 className="mt-1 w-full rounded-md border border-input bg-background px-3 py-2 text-sm resize-none focus:outline-none focus:ring-2 focus:ring-orange-400" />
             </div>
@@ -418,7 +405,8 @@ export default function CatalogContent() {
             <Button variant="outline" onClick={() => setModalOpen(false)} disabled={saving}>Annuler</Button>
             <Button onClick={handleSave} disabled={saving}
               className="bg-orange-500 hover:bg-orange-600 text-white gap-2">
-              {saving ? <><Loader2 className="h-4 w-4 animate-spin" />Enregistrement...</>
+              {saving
+                ? <><Loader2 className="h-4 w-4 animate-spin" />Enregistrement...</>
                 : <><Check className="h-4 w-4" />{editingId ? "Modifier" : "Ajouter"}</>}
             </Button>
           </DialogFooter>
@@ -430,10 +418,10 @@ export default function CatalogContent() {
         <DialogContent className="max-w-sm">
           <DialogHeader>
             <DialogTitle className="text-red-600 flex items-center gap-2">
-              <Trash2 className="h-5 w-5" /> Supprimer cet article ?
+              <Trash2 className="h-5 w-5" />Supprimer cet article ?
             </DialogTitle>
           </DialogHeader>
-          <p className="text-sm text-gray-500 py-2">L&apos;article sera masqué du catalogue. Cette action est réversible.</p>
+          <p className="text-sm text-gray-500 py-2">L&apos;article sera masqué du catalogue.</p>
           <DialogFooter className="gap-2">
             <Button variant="outline" onClick={() => setDeleteId(null)} disabled={deleting}>Annuler</Button>
             <Button onClick={handleDelete} disabled={deleting}
