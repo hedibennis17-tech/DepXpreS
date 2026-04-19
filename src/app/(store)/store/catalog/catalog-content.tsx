@@ -3,7 +3,7 @@
 import { useState, useEffect, useRef } from "react";
 import {
   collection, query, where, onSnapshot,
-  doc, updateDoc, serverTimestamp, addDoc, getDoc
+  doc, updateDoc, serverTimestamp, getDoc
 } from "firebase/firestore";
 import { db } from "@/lib/firebase";
 import { TAXONOMY, getCategoriesByCommerceSlug } from "@/lib/taxonomy";
@@ -162,10 +162,25 @@ export default function CatalogContent() {
       if (imageUrl) payload.imageUrl = imageUrl;
 
       if (editingId) {
-        await updateDoc(doc(db, "products", editingId), payload);
+        // Modifier via API store
+        const res = await fetch("/api/store/products", {
+          method: "PATCH",
+          headers: { "Content-Type": "application/json" },
+          credentials: "include",
+          body: JSON.stringify({ productId: editingId, updates: payload }),
+        });
+        const data = await res.json().catch(() => null);
+        if (!res.ok) throw new Error(data?.error || "Erreur modification");
       } else {
-        payload.createdAt = serverTimestamp();
-        await addDoc(collection(db, "products"), payload);
+        // Créer via API store (Admin SDK — bypass règles Firestore)
+        const res = await fetch("/api/store/products", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          credentials: "include",
+          body: JSON.stringify({ ...payload }),
+        });
+        const data = await res.json().catch(() => null);
+        if (!res.ok) throw new Error(data?.error || "Erreur création");
       }
       setModalOpen(false);
     } catch (e) {

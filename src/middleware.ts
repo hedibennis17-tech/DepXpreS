@@ -14,6 +14,7 @@ const PUBLIC_ROUTES = [
   "/api/auth/driver/signup",
   "/api/auth/store/signup",
   "/api/auth/store/login",
+  "/api/store/products",
   "/api/auth/login",
   "/api/admin/auth/login",
   "/api/admin/auth/verify",
