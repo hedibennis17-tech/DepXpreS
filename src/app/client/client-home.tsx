@@ -115,26 +115,34 @@ export default function ClientHome() {
           );
           setNearbyStores(nearbyList.slice(0, 8));
         }
-        // Charger les produits des stores de la zone (max 2 par store)
+        // Charger tous les produits disponibles (isAvailable OR isActive)
         const allProductsList: Product[] = [];
-        const storeList = mainStores.length > 0 ? mainStores : allStores.slice(0, 5);
-        await Promise.all(storeList.slice(0, 6).map(async (store) => {
-          try {
-            const pq = query(
-              collection(db, "products"),
-              where("storeId", "==", store.id),
-              limit(8)
-            );
-            const psnap = await getDocs(pq);
-            psnap.docs.forEach(d => {
-              const data = d.data();
-              // Accepter si isAvailable est true OU non défini
-              if (data.isAvailable !== false) {
-                allProductsList.push({ id: d.id, ...data, storeName: store.name } as Product);
-              }
-            });
-          } catch {}
-        }));
+        try {
+          const pq = query(collection(db, "products"), limit(80));
+          const psnap = await getDocs(pq);
+          // Map storeId → storeName
+          const storeMap: Record<string, string> = {};
+          [...mainStores, ...allStores].forEach(s => { storeMap[s.id] = s.name; });
+          psnap.docs.forEach(d => {
+            const data = d.data();
+            // Accepter si isAvailable !== false ET (isActive === true OR isAvailable === true)
+            const available = data.isAvailable !== false;
+            const active = data.isActive !== false;
+            if (available && active && data.price) {
+              allProductsList.push({
+                id: d.id,
+                name: data.name || "",
+                price: data.price || 0,
+                imageUrl: data.imageUrl || "",
+                categoryName: data.categoryName || data.category || "",
+                subcategoryName: data.subcategoryName || "",
+                storeId: data.storeId || "",
+                storeName: data.storeName || storeMap[data.storeId] || data.storeName || "Commerce",
+                isAvailable: available,
+              } as Product);
+            }
+          });
+        } catch (e) { console.error("products load:", e); }
         setHomeProducts(allProductsList);
 
       } catch (e) {
