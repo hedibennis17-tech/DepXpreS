@@ -25,6 +25,7 @@ const PUBLIC_ROUTES = [
   "/api/admin/test",
   "/api/admin/debug",
   "/api/debug/products",
+  "/api/client/products",
 ];
 
 const ADMIN_ROLES = ["super_admin", "admin", "dispatcher", "agent"] as const;
