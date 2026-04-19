@@ -405,7 +405,7 @@ export default function ClientHome() {
                 </div>
                 <div className="flex justify-between text-xs">
                   <span className="text-gray-500">Zones voisines</span>
-                  <span className="font-semibold text-blue-500">{(ZONE_NEIGHBORS[zone] || []).length} zones</span>
+                  <span className="font-semibold text-blue-500">{getNeighborZones(currentZone?.id || "").length} zones</span>
                 </div>
               </div>
             </div>
