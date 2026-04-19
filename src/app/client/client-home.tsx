@@ -8,8 +8,27 @@ import { ACTIVE_ZONES, getNeighborZones, searchZones, type DeliveryZone } from "
 import Link from "next/link";
 import {
   Search, MapPin, ChevronRight, Star, Clock, Zap,
-  Store, Package, ArrowRight, TrendingUp, ShieldCheck
+  Store, Package, ArrowRight, TrendingUp, ShieldCheck, ChevronLeft
 } from "lucide-react";
+
+interface Product {
+  id: string; name: string; price: number;
+  imageUrl?: string; categoryName?: string; subcategoryName?: string;
+  storeId: string; storeName?: string; isAvailable?: boolean;
+}
+
+const HOME_BLOCKS = [
+  { key: "boissons", label: "🥤 Boissons", keywords: ["eau", "soda", "jus", "boisson", "energy", "thé glacé", "café froid", "kombucha"] },
+  { key: "snacks", label: "🍿 Snacks & chips", keywords: ["chips", "craquelin", "nachos", "pop-corn", "noix", "snack", "collation", "barre"] },
+  { key: "alcool", label: "🍺 Alcool & bières", keywords: ["bière", "vin", "alcool", "spiritueux", "cooler", "lager", "ipa", "stout"] },
+  { key: "chocolat", label: "🍫 Chocolat & bonbons", keywords: ["chocolat", "bonbon", "barre", "caramel", "sucette", "gomme", "friandise"] },
+  { key: "tabac", label: "🚬 Tabac & vapotage", keywords: ["cigarette", "cigare", "tabac", "vape", "vapotage", "pod", "nicotine", "briquet"] },
+];
+
+function matchBlock(p: Product, keywords: string[]): boolean {
+  const text = [p.name, p.categoryName, p.subcategoryName].join(" ").toLowerCase();
+  return keywords.some(k => text.includes(k.toLowerCase()));
+}
 
 interface StoreData {
   id: string; name: string; address?: string; zoneName?: string;
@@ -48,6 +67,7 @@ export default function ClientHome() {
   }, []);
   const [stores, setStores] = useState<StoreData[]>([]);
   const [nearbyStores, setNearbyStores] = useState<StoreData[]>([]);
+  const [homeProducts, setHomeProducts] = useState<Product[]>([]);
   const [loading, setLoading] = useState(true);
   const [search, setSearch] = useState("");
   const [searchResults, setSearchResults] = useState<{ name: string; storeId: string; storeName: string; price: number; imageUrl?: string }[]>([]);
@@ -95,6 +115,25 @@ export default function ClientHome() {
           );
           setNearbyStores(nearbyList.slice(0, 8));
         }
+        // Charger les produits des stores de la zone (max 2 par store)
+        const allProductsList: Product[] = [];
+        const storeList = mainStores.length > 0 ? mainStores : allStores.slice(0, 5);
+        await Promise.all(storeList.slice(0, 6).map(async (store) => {
+          try {
+            const pq = query(
+              collection(db, "products"),
+              where("storeId", "==", store.id),
+              where("isAvailable", "==", true),
+              limit(8)
+            );
+            const psnap = await getDocs(pq);
+            psnap.docs.forEach(d => {
+              allProductsList.push({ id: d.id, ...d.data(), storeName: store.name } as Product);
+            });
+          } catch {}
+        }));
+        setHomeProducts(allProductsList);
+
       } catch (e) {
         console.error(e);
       } finally {
