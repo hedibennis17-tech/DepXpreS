@@ -123,12 +123,15 @@ export default function ClientHome() {
             const pq = query(
               collection(db, "products"),
               where("storeId", "==", store.id),
-              where("isAvailable", "==", true),
               limit(8)
             );
             const psnap = await getDocs(pq);
             psnap.docs.forEach(d => {
-              allProductsList.push({ id: d.id, ...d.data(), storeName: store.name } as Product);
+              const data = d.data();
+              // Accepter si isAvailable est true OU non défini
+              if (data.isAvailable !== false) {
+                allProductsList.push({ id: d.id, ...data, storeName: store.name } as Product);
+              }
             });
           } catch {}
         }));
