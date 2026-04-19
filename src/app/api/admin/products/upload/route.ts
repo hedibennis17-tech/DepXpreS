@@ -7,7 +7,8 @@ import { getAdminBucket } from "@/lib/firebase-admin";
 function isAdmin(req: NextRequest) {
   const role = req.cookies.get("admin_role")?.value;
   const token = req.cookies.get("admin_token")?.value;
-  return (role && ["super_admin","admin"].includes(role)) || !!token;
+  const storeSession = req.cookies.get("store_session")?.value;
+  return (role && ["super_admin","admin"].includes(role)) || !!token || !!storeSession;
 }
 
 export async function POST(req: NextRequest) {
