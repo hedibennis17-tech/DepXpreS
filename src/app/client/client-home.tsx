@@ -325,22 +325,14 @@ export default function ClientHome() {
                 </span>
               </div>
 
-              {/* Map */}
+              {/* Map iframe Google Maps */}
               <div className="h-72">
-                <GoogleMapView
-                  center={{ lat: 45.5514, lng: -73.6483 }}
-                  zoom={12}
-                  height="100%"
-                  markers={[
-                    ...filteredStores.slice(0, 8).map(s => ({
-                      id: s.id,
-                      lat: 45.52 + (Math.random() - 0.5) * 0.15,
-                      lng: -73.65 + (Math.random() - 0.5) * 0.15,
-                      type: "store" as const,
-                      label: s.name,
-                      status: s.isOpen ? "open" : "closed",
-                    })),
-                  ]}
+                <iframe
+                  src="https://www.google.com/maps/embed?pb=!1m14!1m12!1m3!1d22400!2d-73.7124!3d45.5631!2m3!1f0!2f0!3f0!3m2!1i1024!2i768!4f13.1!5e0!3m2!1sfr!2sca!4v1"
+                  width="100%" height="100%"
+                  style={{ border: 0 }}
+                  allowFullScreen loading="lazy"
+                  referrerPolicy="no-referrer-when-downgrade"
                 />
               </div>
 
@@ -401,17 +393,12 @@ export default function ClientHome() {
             </span>
           </div>
           <div className="h-56">
-            <GoogleMapView
-              center={{ lat: 45.5514, lng: -73.6483 }}
-              zoom={11}
-              height="100%"
-              markers={filteredStores.slice(0, 5).map(s => ({
-                id: s.id,
-                lat: 45.52 + (Math.random() - 0.5) * 0.15,
-                lng: -73.65 + (Math.random() - 0.5) * 0.15,
-                type: "store" as const,
-                label: s.name,
-              }))}
+            <iframe
+              src="https://www.google.com/maps/embed?pb=!1m14!1m12!1m3!1d22400!2d-73.7124!3d45.5631!2m3!1f0!2f0!3f0!3m2!1i1024!2i768!4f13.1!5e0!3m2!1sfr!2sca!4v1"
+              width="100%" height="100%"
+              style={{ border: 0 }}
+              allowFullScreen loading="lazy"
+              referrerPolicy="no-referrer-when-downgrade"
             />
           </div>
         </div>
