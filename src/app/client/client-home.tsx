@@ -126,9 +126,10 @@ export default function ClientHome() {
           psnap.docs.forEach(d => {
             const data = d.data();
             // Accepter si isAvailable !== false ET (isActive === true OR isAvailable === true)
-            const available = data.isAvailable !== false;
-            const active = data.isActive !== false;
-            if (available && active && data.price) {
+            // Accepter si isAvailable OU isActive est true (les 2 schémas coexistent)
+            const available = data.isAvailable === true || data.isActive === true ||
+              (data.isAvailable === undefined && data.isActive === undefined);
+            if (available && data.price && data.name) {
               allProductsList.push({
                 id: d.id,
                 name: data.name || "",
