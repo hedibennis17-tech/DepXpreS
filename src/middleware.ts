@@ -15,6 +15,7 @@ const PUBLIC_ROUTES = [
   "/api/auth/store/signup",
   "/api/auth/store/login",
   "/api/store/products",
+  "/api/store/upload",
   "/api/auth/login",
   "/api/admin/auth/login",
   "/api/admin/auth/verify",

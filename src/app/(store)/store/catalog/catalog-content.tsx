@@ -138,7 +138,7 @@ export default function CatalogContent() {
         setUploadProgress("📤 Upload image...");
         const fd = new FormData();
         fd.append("file", imageFile);
-        const upRes = await fetch("/api/admin/products/upload", {
+        const upRes = await fetch("/api/store/upload", {
           method: "POST", credentials: "include", body: fd,
         });
         const upData = await upRes.json().catch(() => null);
