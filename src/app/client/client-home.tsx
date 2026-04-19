@@ -193,7 +193,10 @@ export default function ClientHome() {
         </div>
       </div>
 
-      <div className="max-w-5xl mx-auto px-4 -mt-6 space-y-8">
+      <div className="max-w-7xl mx-auto px-4 -mt-6">
+        <div className="flex gap-6 items-start">
+          {/* Colonne principale */}
+          <div className="flex-1 min-w-0 space-y-8">
 
         {/* ── STATS ──────────────────────────────────────────────── */}
         <div className="grid grid-cols-3 gap-3">
@@ -305,6 +308,114 @@ export default function ClientHome() {
             </Link>
           </div>
         )}
+          </div>{/* fin colonne principale */}
+
+          {/* ── CARTE GOOGLE MAPS — desktop uniquement ─────────── */}
+          <div className="hidden lg:block w-80 xl:w-96 shrink-0 sticky top-20">
+            <div className="bg-white rounded-3xl border border-gray-100 shadow-sm overflow-hidden">
+              {/* Header carte */}
+              <div className="px-4 py-3 border-b border-gray-100 flex items-center justify-between">
+                <div className="flex items-center gap-2">
+                  <MapPin className="h-4 w-4 text-orange-500" />
+                  <span className="text-sm font-bold text-gray-900">Carte de la zone</span>
+                </div>
+                <span className="text-xs text-green-500 font-semibold flex items-center gap-1">
+                  <span className="w-1.5 h-1.5 bg-green-500 rounded-full animate-pulse" />
+                  En direct
+                </span>
+              </div>
+
+              {/* Map */}
+              <div className="h-72">
+                <GoogleMapView
+                  center={{ lat: 45.5514, lng: -73.6483 }}
+                  zoom={12}
+                  height="100%"
+                  markers={[
+                    ...filteredStores.slice(0, 8).map(s => ({
+                      id: s.id,
+                      lat: 45.52 + (Math.random() - 0.5) * 0.15,
+                      lng: -73.65 + (Math.random() - 0.5) * 0.15,
+                      type: "store" as const,
+                      label: s.name,
+                      status: s.isOpen ? "open" : "closed",
+                    })),
+                  ]}
+                />
+              </div>
+
+              {/* Légende */}
+              <div className="px-4 py-3 bg-gray-50 border-t border-gray-100">
+                <div className="flex items-center justify-between text-xs text-gray-500">
+                  <div className="flex items-center gap-1.5">
+                    <span className="text-base">🏪</span>
+                    <span>{filteredStores.filter(s => s.isOpen).length} commerce{filteredStores.filter(s => s.isOpen).length > 1 ? "s" : ""} ouvert{filteredStores.filter(s => s.isOpen).length > 1 ? "s" : ""}</span>
+                  </div>
+                  <div className="flex items-center gap-1.5">
+                    <span className="text-base">🚗</span>
+                    <span>Chauffeurs actifs</span>
+                  </div>
+                </div>
+              </div>
+            </div>
+
+            {/* Zone info card */}
+            <div className="mt-4 bg-white rounded-3xl border border-gray-100 shadow-sm p-4">
+              <h3 className="text-sm font-bold text-gray-900 mb-3 flex items-center gap-2">
+                <MapPin className="h-4 w-4 text-orange-500" />
+                Votre zone de livraison
+              </h3>
+              <div className="space-y-2">
+                <div className="flex justify-between text-xs">
+                  <span className="text-gray-500">Zone</span>
+                  <span className="font-semibold text-gray-900">{zone}</span>
+                </div>
+                <div className="flex justify-between text-xs">
+                  <span className="text-gray-500">Délai estimé</span>
+                  <span className="font-semibold text-orange-500">25–35 min</span>
+                </div>
+                <div className="flex justify-between text-xs">
+                  <span className="text-gray-500">Commerces actifs</span>
+                  <span className="font-semibold text-gray-900">{filteredStores.length}</span>
+                </div>
+                <div className="flex justify-between text-xs">
+                  <span className="text-gray-500">Zones voisines</span>
+                  <span className="font-semibold text-blue-500">{(ZONE_NEIGHBORS[zone] || []).length} zones</span>
+                </div>
+              </div>
+            </div>
+          </div>
+
+        </div>{/* fin flex principal */}
+
+        {/* Carte mobile — en bas de page */}
+        <div className="lg:hidden mt-8 bg-white rounded-3xl border border-gray-100 shadow-sm overflow-hidden">
+          <div className="px-4 py-3 border-b border-gray-100 flex items-center justify-between">
+            <div className="flex items-center gap-2">
+              <MapPin className="h-4 w-4 text-orange-500" />
+              <span className="text-sm font-bold text-gray-900">Carte de la zone</span>
+            </div>
+            <span className="text-xs text-green-500 font-semibold flex items-center gap-1">
+              <span className="w-1.5 h-1.5 bg-green-500 rounded-full animate-pulse" />
+              En direct
+            </span>
+          </div>
+          <div className="h-56">
+            <GoogleMapView
+              center={{ lat: 45.5514, lng: -73.6483 }}
+              zoom={11}
+              height="100%"
+              markers={filteredStores.slice(0, 5).map(s => ({
+                id: s.id,
+                lat: 45.52 + (Math.random() - 0.5) * 0.15,
+                lng: -73.65 + (Math.random() - 0.5) * 0.15,
+                type: "store" as const,
+                label: s.name,
+              }))}
+            />
+          </div>
+        </div>
+
       </div>
     </div>
   );
