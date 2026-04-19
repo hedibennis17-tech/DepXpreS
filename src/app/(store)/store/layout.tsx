@@ -4,6 +4,7 @@ import { useRouter, usePathname } from "next/navigation";
 import { onAuthStateChanged, signOut } from "firebase/auth";
 import { doc, getDoc } from "firebase/firestore";
 import { auth, db } from "@/lib/firebase";
+import { ACTIVE_ZONES } from "@/lib/delivery-zones";
 import Link from "next/link";
 import {
   LayoutDashboard, ShoppingBag, Package, Calendar,

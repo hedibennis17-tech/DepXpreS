@@ -1,3 +1,6 @@
+"use client";
+
+import { ACTIVE_ZONES, findZonesByGroup } from "@/lib/delivery-zones";
 'use client';
 import { useState, useEffect, useCallback } from 'react';
 import dynamic from 'next/dynamic';

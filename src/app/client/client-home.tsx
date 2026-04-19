@@ -4,6 +4,7 @@ import { auth, db } from "@/lib/firebase";
 import { onAuthStateChanged, User as FirebaseUser } from "firebase/auth";
 import { collection, query, where, getDocs, limit, orderBy } from "firebase/firestore";
 import { TAXONOMY } from "@/lib/taxonomy";
+import { ACTIVE_ZONES, getNeighborZones, searchZones, type DeliveryZone } from "@/lib/delivery-zones";
 import Link from "next/link";
 import {
   Search, MapPin, ChevronRight, Star, Clock, Zap,
@@ -17,14 +18,7 @@ interface StoreData {
   deliveryTime?: number; minOrder?: number;
 }
 
-const ZONE_NEIGHBORS: Record<string, string[]> = {
-  "Laval — Chomedey": ["Laval — Sainte-Dorothée", "Laval — Fabreville", "Laval — Vimont"],
-  "Laval — Sainte-Dorothée": ["Laval — Chomedey", "Laval — Fabreville"],
-  "Laval — Vimont": ["Laval — Auteuil", "Laval — Chomedey"],
-  "Montréal — Centre-Ville": ["Montréal — Plateau", "Montréal — Rosemont"],
-  "Montréal — Rosemont": ["Montréal — Plateau", "Montréal — Ahuntsic"],
-  "Longueuil — Centre": ["Longueuil — Saint-Hubert"],
-};
+
 
 // Top catégories pour la page accueil
 const TOP_CATEGORIES = [
@@ -42,7 +36,16 @@ const TOP_CATEGORIES = [
 
 export default function ClientHome() {
   const [user, setUser] = useState<FirebaseUser | null>(null);
-  const [zone] = useState("Laval — Chomedey");
+  const [currentZone, setCurrentZone] = useState<DeliveryZone | null>(null);
+  const [zone, setZone] = useState("Chomedey");
+  const [showZonePicker, setShowZonePicker] = useState(false);
+  const [zoneSearch, setZoneSearch] = useState("");
+
+  // Trouver la zone par défaut (Chomedey)
+  useEffect(() => {
+    const defaultZone = ACTIVE_ZONES.find(z => z.slug === "chomedey");
+    if (defaultZone) { setCurrentZone(defaultZone); setZone(defaultZone.name); }
+  }, []);
   const [stores, setStores] = useState<StoreData[]>([]);
   const [nearbyStores, setNearbyStores] = useState<StoreData[]>([]);
   const [loading, setLoading] = useState(true);
@@ -62,28 +65,35 @@ export default function ClientHome() {
     async function loadStores() {
       setLoading(true);
       try {
-        // Stores zone principale
+        // Stores zone principale — chercher par nom ET slug
+        const zoneNames = currentZone
+          ? [currentZone.name, ...currentZone.aliases]
+          : [zone];
+
         const q = query(
           collection(db, "stores"),
-          where("zoneName", "==", zone),
           where("status", "==", "active"),
-          limit(20)
+          limit(50)
         );
         const snap = await getDocs(q);
-        const mainStores = snap.docs.map(d => ({ id: d.id, ...d.data() } as StoreData));
-        setStores(mainStores);
+        const allStores = snap.docs.map(d => ({ id: d.id, ...d.data() } as StoreData));
 
-        // Stores zones voisines
-        const neighbors = ZONE_NEIGHBORS[zone] || [];
-        if (neighbors.length > 0) {
-          const q2 = query(
-            collection(db, "stores"),
-            where("zoneName", "in", neighbors),
-            where("status", "==", "active"),
-            limit(10)
+        // Filtrer par zone
+        const mainStores = allStores.filter(s =>
+          zoneNames.some(n => s.zoneName?.toLowerCase().includes(n.toLowerCase()) ||
+            n.toLowerCase().includes(s.zoneName?.toLowerCase() || "xxx"))
+        );
+        setStores(mainStores.length > 0 ? mainStores : allStores.slice(0, 10));
+
+        // Zones voisines depuis delivery-zones
+        if (currentZone) {
+          const neighborZones = getNeighborZones(currentZone.id);
+          const neighborNames = neighborZones.flatMap(z => [z.name, ...z.aliases]);
+          const nearbyList = allStores.filter(s =>
+            !mainStores.find(m => m.id === s.id) &&
+            neighborNames.some(n => s.zoneName?.toLowerCase().includes(n.toLowerCase()))
           );
-          const snap2 = await getDocs(q2);
-          setNearbyStores(snap2.docs.map(d => ({ id: d.id, ...d.data() } as StoreData)));
+          setNearbyStores(nearbyList.slice(0, 8));
         }
       } catch (e) {
         console.error(e);
@@ -92,7 +102,7 @@ export default function ClientHome() {
       }
     }
     loadStores();
-  }, [zone]);
+  }, [zone, currentZone]);
 
   // Recherche autocomplete
   useEffect(() => {
@@ -137,12 +147,35 @@ export default function ClientHome() {
 
         <div className="max-w-3xl mx-auto relative">
           {/* Zone */}
-          <div className="flex items-center gap-2 mb-4">
-            <div className="flex items-center gap-1.5 bg-white/10 backdrop-blur rounded-full px-3 py-1.5 border border-white/20">
+          <div className="flex items-center gap-2 mb-4 relative">
+            <button onClick={() => setShowZonePicker(v => !v)}
+              className="flex items-center gap-1.5 bg-white/10 backdrop-blur rounded-full px-3 py-1.5 border border-white/20 hover:bg-white/20 transition-colors">
               <MapPin className="h-3.5 w-3.5 text-orange-400" />
-              <span className="text-sm font-medium">{zone}</span>
+              <span className="text-sm font-medium">{currentZone?.name || zone}</span>
               <ChevronRight className="h-3 w-3 text-gray-400" />
-            </div>
+            </button>
+
+            {showZonePicker && (
+              <div className="absolute top-10 left-0 w-72 bg-gray-900 border border-white/10 rounded-2xl shadow-2xl z-50 overflow-hidden">
+                <div className="p-3 border-b border-white/10">
+                  <input value={zoneSearch} onChange={e => setZoneSearch(e.target.value)}
+                    placeholder="Chercher votre zone..."
+                    className="w-full bg-white/10 text-white placeholder-gray-500 text-sm px-3 py-2 rounded-xl outline-none border border-white/10 focus:border-orange-500/50" />
+                </div>
+                <div className="max-h-64 overflow-y-auto">
+                  {(zoneSearch.length >= 2 ? searchZones(zoneSearch) : ACTIVE_ZONES.slice(0, 20)).map(z => (
+                    <button key={z.id} onClick={() => { setCurrentZone(z); setZone(z.name); setShowZonePicker(false); setZoneSearch(""); }}
+                      className="w-full flex items-center gap-3 px-4 py-2.5 hover:bg-white/5 transition-colors text-left">
+                      <MapPin className="h-3.5 w-3.5 text-orange-400 shrink-0" />
+                      <div>
+                        <p className="text-sm font-medium text-white">{z.name}</p>
+                        <p className="text-[10px] text-gray-500">{z.city} · {z.estimated_time_min}-{z.estimated_time_max} min</p>
+                      </div>
+                    </button>
+                  ))}
+                </div>
+              </div>
+            )}
           </div>
 
           <h1 className="text-3xl md:text-4xl font-bold mb-2 leading-tight">

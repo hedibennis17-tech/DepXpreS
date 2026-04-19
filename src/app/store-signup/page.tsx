@@ -18,21 +18,7 @@ const STEPS = [
   { id: 4, label: "Confirmation",     icon: CheckCircle2 },
 ];
 
-const ZONES = [
-  "Laval — Chomedey",
-  "Laval — Sainte-Dorothée",
-  "Laval — Vimont",
-  "Laval — Auteuil",
-  "Laval — Fabreville",
-  "Montréal — Centre-Ville",
-  "Montréal — Rosemont",
-  "Montréal — Plateau",
-  "Montréal — Ahuntsic",
-  "Montréal — Saint-Laurent",
-  "Longueuil — Centre",
-  "Longueuil — Saint-Hubert",
-  "Laval Ouest",
-];
+import { ACTIVE_ZONES } from "@/lib/delivery-zones";
 
 const EMPTY = {
   // Étape 1 — Commerce
@@ -298,7 +284,19 @@ export default function StoreSignupPage() {
                     <SelectValue placeholder="Sélectionner votre zone..." />
                   </SelectTrigger>
                   <SelectContent>
-                    {ZONES.map(z => <SelectItem key={z} value={z}>{z}</SelectItem>)}
+                    {["laval","montreal","longueuil"].map(group => (
+                      <div key={group}>
+                        <div className="px-2 py-1.5 text-xs font-semibold text-muted-foreground bg-muted/60 border-b sticky top-0 capitalize">
+                          {group === "montreal" ? "Montréal" : group === "longueuil" ? "Longueuil" : "Laval"}
+                        </div>
+                        {ACTIVE_ZONES.filter(z => z.delivery_zone_group === group).map(z => (
+                          <SelectItem key={z.id} value={z.name}>
+                            {z.name}
+                            <span className="text-xs text-muted-foreground ml-1">· {z.estimated_time_min}-{z.estimated_time_max} min</span>
+                          </SelectItem>
+                        ))}
+                      </div>
+                    ))}
                   </SelectContent>
                 </Select>
               </div>
