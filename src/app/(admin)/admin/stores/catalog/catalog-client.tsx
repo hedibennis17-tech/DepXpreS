@@ -4,8 +4,7 @@ import { useEffect, useMemo, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
 import { collection, getDocs, query } from "firebase/firestore";
 import { db } from "@/lib/firebase";
-import { TAXONOMY, ALL_CATEGORIES, getCategoriesByCommerceSlug } from "@/lib/taxonomy";
-import type { Category, SubCategory } from "@/lib/taxonomy";
+import { TAXONOMY } from "@/lib/taxonomy";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -415,15 +414,8 @@ export default function StoresCatalogPage() {
                   </SelectTrigger>
                   <SelectContent className="max-h-72">
                     <SelectItem value="none">— Tous types —</SelectItem>
-                    {COMMERCE_TYPE_GROUPS.map(group => (
-                      <div key={group}>
-                        <div className="px-2 py-1.5 text-xs font-semibold text-muted-foreground bg-muted/60 border-b sticky top-0">
-                          {group}
-                        </div>
-                        {COMMERCE_TYPES.filter(c => c.group === group).map(ct => (
-                          <SelectItem key={ct.id} value={ct.id}>{ct.name}</SelectItem>
-                        ))}
-                      </div>
+                    {TAXONOMY.map(ct => (
+                      <SelectItem key={ct.id} value={ct.id}>{ct.name}</SelectItem>
                     ))}
                   </SelectContent>
                 </Select>
