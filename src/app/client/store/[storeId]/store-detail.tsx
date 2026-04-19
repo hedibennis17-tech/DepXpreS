@@ -6,8 +6,9 @@ import { doc, getDoc, collection, query, where, getDocs } from "firebase/firesto
 import Link from "next/link";
 import {
   ArrowLeft, Star, Clock, MapPin, Phone, Package,
-  Search, ShoppingCart, Plus, Minus, Store, CheckCircle2
+  Search, ShoppingCart, Plus, Minus, Store
 } from "lucide-react";
+import { useCart } from "@/context/CartContext";
 
 interface StoreData {
   id: string; name: string; address?: string; phone?: string;
@@ -22,8 +23,6 @@ interface Product {
   requiresAgeVerification?: boolean;
 }
 
-interface CartItem extends Product { qty: number; }
-
 export default function StoreDetail() {
   const params = useParams();
   const router = useRouter();
@@ -34,8 +33,7 @@ export default function StoreDetail() {
   const [loading, setLoading] = useState(true);
   const [search, setSearch] = useState("");
   const [selectedCat, setSelectedCat] = useState<string | null>(null);
-  const [cart, setCart] = useState<CartItem[]>([]);
-  const [showCartBar, setShowCartBar] = useState(false);
+  const cart = useCart();
 
   useEffect(() => {
     async function load() {
@@ -77,26 +75,20 @@ export default function StoreDetail() {
   }, {} as Record<string, Product[]>);
 
   function addToCart(product: Product) {
-    setCart(prev => {
-      const existing = prev.find(i => i.id === product.id);
-      if (existing) return prev.map(i => i.id === product.id ? { ...i, qty: i.qty + 1 } : i);
-      return [...prev, { ...product, qty: 1 }];
-    });
-    setShowCartBar(true);
-  }
-
-  function removeFromCart(productId: string) {
-    setCart(prev => {
-      const item = prev.find(i => i.id === productId);
-      if (!item) return prev;
-      if (item.qty <= 1) return prev.filter(i => i.id !== productId);
-      return prev.map(i => i.id === productId ? { ...i, qty: i.qty - 1 } : i);
+    cart.add({
+      id: product.id,
+      name: product.name,
+      price: product.price,
+      imageUrl: product.imageUrl,
+      categoryName: product.categoryName,
+      storeId,
+      storeName: store?.name || "",
     });
   }
 
-  const cartQty = (productId: string) => cart.find(i => i.id === productId)?.qty || 0;
-  const cartTotal = cart.reduce((sum, i) => sum + i.price * i.qty, 0);
-  const cartCount = cart.reduce((sum, i) => sum + i.qty, 0);
+  const cartQty = (productId: string) => cart.qty(productId);
+  const cartTotal = cart.total;
+  const cartCount = cart.count;
 
   if (loading) return (
     <div className="min-h-screen bg-gray-50 flex items-center justify-center">
@@ -264,7 +256,7 @@ export default function StoreDetail() {
                             </button>
                           ) : (
                             <div className="flex items-center gap-2">
-                              <button onClick={() => removeFromCart(product.id)}
+                              <button onClick={() => cart.decrement(product.id)}
                                 className="w-7 h-7 rounded-full bg-orange-100 flex items-center justify-center hover:bg-orange-200 transition-colors">
                                 <Minus className="h-3.5 w-3.5 text-orange-600" />
                               </button>
