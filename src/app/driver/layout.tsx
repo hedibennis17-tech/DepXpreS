@@ -32,6 +32,16 @@ export default function DriverLayout({ children }: { children: React.ReactNode }
           router.push("/driver/login"); return;
         }
         setDriverName(d.data().display_name || u.displayName || "Chauffeur");
+        // Rediriger vers onboarding si pas complété
+        const profileDoc = await getDoc(doc(db, "driver_profiles", u.uid));
+        const profileData = profileDoc.exists() ? profileDoc.data() : {};
+        const onboardingDone = profileData.onboarding_completed || profileData.wizard_completed;
+        const currentPath = window.location.pathname;
+        const isOnboarding = currentPath.includes("/onboarding");
+        if (!onboardingDone && !isOnboarding) {
+          router.push("/driver/onboarding");
+          return;
+        }
       } catch {}
       finally { setLoading(false); }
     });
