@@ -15,12 +15,13 @@ import {
 } from "@/components/ui/select";
 import {
   Search, RefreshCw, Eye, Truck, CheckCircle2, Clock,
-  Star, Users, Wifi, WifiOff, Package,
+  Star, Users, Wifi, WifiOff, Package, DollarSign,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 
 interface Driver {
   id: string;
+  name?: string;
   firstName: string;
   lastName: string;
   email?: string;
@@ -185,7 +186,8 @@ export default function DriversPage() {
               <TableBody>
                 {drivers.map((driver) => {
                   const appCfg = APP_STATUS_CONFIG[driver.applicationStatus || "pending"] ?? APP_STATUS_CONFIG.pending;
-                  const initials = `${driver.firstName?.[0] || ""}${driver.lastName?.[0] || ""}`.toUpperCase();
+                  const fullName = driver.name || `${driver.firstName || ""} ${driver.lastName || ""}`.trim();
+                  const initials = fullName ? fullName.split(" ").map((n:string) => n[0]).join("").slice(0,2).toUpperCase() : "?";
                   return (
                     <TableRow key={driver.id} className="hover:bg-muted/30 cursor-pointer"
                       onClick={() => router.push(`/admin/drivers/${driver.id}`)}>
@@ -195,7 +197,7 @@ export default function DriversPage() {
                             <AvatarFallback className="bg-purple-100 text-purple-700 text-xs font-semibold">{initials}</AvatarFallback>
                           </Avatar>
                           <div>
-                            <p className="font-medium text-sm">{driver.firstName} {driver.lastName}</p>
+                            <p className="font-medium text-sm">{driver.name || `${driver.firstName || ""} ${driver.lastName || ""}`.trim() || "—"}</p>
                             {driver.vehicleMake && (
                               <p className="text-xs text-muted-foreground">{driver.vehicleMake} {driver.vehicleModel}</p>
                             )}

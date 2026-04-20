@@ -1,6 +1,6 @@
 "use client";
 import { useState, useEffect } from "react";
-import { useParams, useRouter } from "next/navigation";
+import { useParams, useRouter, useSearchParams } from "next/navigation";
 import {
   ArrowLeft, User, Car, FileText, DollarSign, Shield,
   CheckCircle2, XCircle, Clock, Wifi, WifiOff, Phone,
@@ -50,7 +50,10 @@ export default function DriverDetailPage() {
 
   const [driver, setDriver] = useState<Driver | null>(null);
   const [loading, setLoading] = useState(true);
-  const [tab, setTab] = useState<"profil"|"vehicule"|"documents"|"paiement">("profil");
+  const searchParamsHook = useSearchParams();
+  const [tab, setTab] = useState<"profil"|"vehicule"|"documents"|"paiement">(
+    (searchParamsHook.get("tab") as any) || "profil"
+  );
   const [approving, setApproving] = useState(false);
   const [msg, setMsg] = useState<{type:"ok"|"err", text:string}|null>(null);
 

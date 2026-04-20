@@ -30,10 +30,14 @@ export async function GET(req: NextRequest) {
         if (!orderSnap.empty) activeOrder = { id: orderSnap.docs[0].id, ...orderSnap.docs[0].data() };
       } catch {}
 
+      const fullName = data.full_name || userData.display_name || 
+        `${userData.first_name || ""} ${userData.last_name || ""}`.trim() || "—";
       return {
         id: uid,
         uid,
-        name: data.full_name || userData.display_name || "—",
+        name: fullName,
+        firstName: userData.first_name || data.full_name?.split(" ")[0] || "",
+        lastName: userData.last_name || data.full_name?.split(" ").slice(1).join(" ") || "",
         email: userData.email || data.email || "—",
         phone: data.phone || userData.phone || "—",
         status: data.application_status || "draft",
