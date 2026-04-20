@@ -3,149 +3,73 @@ import { NextRequest, NextResponse } from "next/server";
 import { adminDb } from "@/lib/firebase-admin";
 import { FieldValue } from "firebase-admin/firestore";
 
-// Serialise les timestamps Firestore en ISO strings
-function serializeDoc(data: Record<string, unknown>): Record<string, unknown> {
-  const result: Record<string, unknown> = {};
-  for (const [key, value] of Object.entries(data)) {
-    if (value && typeof value === "object" && "toDate" in value) {
-      result[key] = (value as { toDate: () => Date }).toDate().toISOString();
-    } else if (value && typeof value === "object" && "_seconds" in value) {
-      result[key] = new Date((value as { _seconds: number })._seconds * 1000).toISOString();
-    } else {
-      result[key] = value;
-    }
-  }
-  return result;
-}
-
-type SerializedDoc = Record<string, unknown> & { id: string };
-
-export async function GET(
-  req: NextRequest,
-  { params }: { params: Promise<{ driverId: string }> }
-) {
+export async function GET(_: NextRequest, { params }: { params: { driverId: string } }) {
   try {
-    const { driverId } = await params;
-    const driverDoc = await adminDb.collection("driver_profiles").doc(driverId).get();
+    const uid = params.driverId;
+    const [pDoc, uDoc] = await Promise.all([
+      adminDb.collection("driver_profiles").doc(uid).get(),
+      adminDb.collection("app_users").doc(uid).get(),
+    ]);
 
-    if (!driverDoc.exists) {
-      return NextResponse.json({ error: "Driver not found" }, { status: 404 });
-    }
+    const p = pDoc.exists ? pDoc.data()! : {};
+    const u = uDoc.exists ? uDoc.data()! : {};
 
-    const driver: SerializedDoc = { id: driverDoc.id, ...serializeDoc(driverDoc.data()!) };
+    // Stats wallet
+    const paymentsSnap = await adminDb.collection("payments")
+      .where("driverId", "==", uid).get();
+    const total_paid = paymentsSnap.docs
+      .filter(d => d.data().status === "completed")
+      .reduce((s, d) => s + (d.data().amount || 0), 0);
 
-    // Véhicule
-    const vehicleSnap = await adminDb
-      .collection("driver_vehicles")
-      .where("driverId", "==", driverId)
-      .limit(1)
-      .get();
-    const vehicle: SerializedDoc | null = vehicleSnap.empty
-      ? null
-      : { id: vehicleSnap.docs[0].id, ...serializeDoc(vehicleSnap.docs[0].data() as Record<string, unknown>) };
+    const driver = {
+      id: uid, uid,
+      name: p.full_name || u.display_name || "—",
+      email: u.email || "—",
+      phone: p.phone || u.phone || "—",
+      status: p.application_status || "draft",
+      isOnline: p.driver_status === "online",
+      driver_status: p.driver_status || "offline",
+      zone: p.current_zone_id || "—",
+      zone_name: p.zone_name || "",
+      rating: p.rating_average || 0,
+      totalDeliveries: p.total_deliveries || 0,
+      vehicle: p.vehicle_make ? `${p.vehicle_make} ${p.vehicle_model}` : "—",
+      photoUrl: p.photoUrl || u.photoUrl || "",
+      address: p.address || "", city: p.city || "", postalCode: p.postalCode || "",
+      vehicle_type: p.vehicle_type || "",
+      vehicle_make: p.vehicle_make || "",
+      vehicle_model: p.vehicle_model || "",
+      vehicle_year: p.vehicle_year || null,
+      vehicle_color: p.vehicle_color || "",
+      vehicle_plate: p.vehicle_plate || "",
+      license_number: p.license_number || "",
+      license_expiry: p.license_expiry || "",
+      insurance_provider: p.insurance_provider || "",
+      insurance_policy: p.insurance_policy || "",
+      insurance_expiry: p.insurance_expiry || "",
+      registration_expiry: p.registration_expiry || "",
+      wallet_balance: p.wallet_balance || 0,
+      total_paid,
+      application_status: p.application_status || "draft",
+      wizard_completed: p.wizard_completed || false,
+    };
 
-    // Documents
-    const docsSnap = await adminDb
-      .collection("driver_documents")
-      .where("driverId", "==", driverId)
-      .get();
-    const documents: SerializedDoc[] = docsSnap.docs.map((doc) => ({
-      id: doc.id,
-      ...serializeDoc(doc.data() as Record<string, unknown>),
-    }));
-
-    // Commandes récentes (sans orderBy pour éviter l'index composite)
-    const ordersSnap = await adminDb
-      .collection("orders")
-      .where("driverId", "==", driverId)
-      .limit(20)
-      .get();
-    const recentOrders: SerializedDoc[] = ordersSnap.docs
-      .map((doc) => ({
-        id: doc.id,
-        ...serializeDoc(doc.data() as Record<string, unknown>),
-      }))
-      .sort((a, b) => {
-        const aDate = typeof (a as Record<string, unknown>).createdAt === "string" ? new Date((a as Record<string, unknown>).createdAt as string).getTime() : 0;
-        const bDate = typeof (b as Record<string, unknown>).createdAt === "string" ? new Date((b as Record<string, unknown>).createdAt as string).getTime() : 0;
-        return bDate - aDate;
-      })
-      .slice(0, 10);
-
-    // Zone
-    let zone: SerializedDoc | null = null;
-    const zoneId = driver.zoneId;
-    if (typeof zoneId === "string" && zoneId) {
-      const zoneDoc = await adminDb.collection("zones").doc(zoneId).get();
-      if (zoneDoc.exists) {
-        zone = { id: zoneDoc.id, ...serializeDoc(zoneDoc.data()!) };
-      }
-    }
-
-    return NextResponse.json({ driver, vehicle, documents, recentOrders, zone });
-  } catch (error) {
-    console.error("GET driver detail error:", error);
-    return NextResponse.json({ error: "Failed to fetch driver" }, { status: 500 });
+    return NextResponse.json({ driver });
+  } catch (e) {
+    return NextResponse.json({ error: String(e) }, { status: 500 });
   }
 }
 
-export async function PATCH(
-  req: NextRequest,
-  { params }: { params: Promise<{ driverId: string }> }
-) {
+export async function PATCH(req: NextRequest, { params }: { params: { driverId: string } }) {
   try {
-    const { driverId } = await params;
-    const body = await req.json();
-
-    const allowedFields = [
-      "applicationStatus", "verificationStatus", "status",
-      "isOnline", "availabilityStatus", "zoneId", "zoneName",
-      "notes", "suspensionReason",
-      "email", "firstName", "lastName", "phone",
-      "passwordHint", "authUid", "accountCreated",
-    ];
-
-    const updates: Record<string, unknown> = {};
-    for (const field of allowedFields) {
-      if (field in body) updates[field] = body[field];
-    }
-
-    if (Object.keys(updates).length === 0) {
-      return NextResponse.json({ error: "No valid fields to update" }, { status: 400 });
-    }
-
-    updates.updatedAt = FieldValue.serverTimestamp();
-
-    await adminDb.collection("driver_profiles").doc(driverId).update(
-      updates as { [key: string]: unknown }
-    );
-
-    return NextResponse.json({ success: true, driverId, updates: Object.keys(updates) });
-  } catch (error) {
-    console.error("PATCH driver error:", error);
-    return NextResponse.json({ error: "Failed to update driver" }, { status: 500 });
-  }
-}
-
-export async function DELETE(
-  req: NextRequest,
-  { params }: { params: Promise<{ driverId: string }> }
-) {
-  try {
-    const { driverId } = await params;
-    
-    // Désactiver le compte plutôt que de supprimer
-    await adminDb.collection("driver_profiles").doc(driverId).update({
-      applicationStatus: "rejected",
-      isOnline: false,
-      availabilityStatus: "offline",
-      deletedAt: FieldValue.serverTimestamp(),
-      updatedAt: FieldValue.serverTimestamp(),
-    } as { [key: string]: unknown });
-
-    return NextResponse.json({ success: true, driverId });
-  } catch (error) {
-    console.error("DELETE driver error:", error);
-    return NextResponse.json({ error: "Failed to deactivate driver" }, { status: 500 });
+    const uid = params.driverId;
+    const updates = await req.json();
+    await adminDb.collection("driver_profiles").doc(uid).update({
+      ...updates,
+      updated_at: FieldValue.serverTimestamp(),
+    });
+    return NextResponse.json({ ok: true });
+  } catch (e) {
+    return NextResponse.json({ error: String(e) }, { status: 500 });
   }
 }

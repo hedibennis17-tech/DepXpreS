@@ -25,6 +25,7 @@ const PUBLIC_ROUTES = [
   "/api/address/reverse",
   "/api/admin/test",
   "/api/admin/debug",
+  "/api/admin/payments",
   "/api/debug/products",
   "/api/client/products",
 ];
