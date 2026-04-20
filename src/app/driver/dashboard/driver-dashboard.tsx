@@ -150,6 +150,21 @@ export default function DriverDashboard() {
   return (
     <div className="min-h-screen bg-[#0a0a0a] text-white pb-24 px-4 pt-4 space-y-4 max-w-lg mx-auto">
 
+      {/* Banner wizard si profil incomplet */}
+      {!driver.vehicle_make && (
+        <Link href="/driver/wizard"
+          className="flex items-center gap-3 bg-orange-500/10 border border-orange-500/30 rounded-2xl p-4 hover:bg-orange-500/15 transition-colors">
+          <div className="w-10 h-10 bg-orange-500 rounded-xl flex items-center justify-center shrink-0">
+            <User className="h-5 w-5 text-white" />
+          </div>
+          <div className="flex-1">
+            <p className="text-sm font-bold text-orange-400">Compléter mon profil</p>
+            <p className="text-xs text-gray-500">Ajoutez votre véhicule et vos documents pour être approuvé</p>
+          </div>
+          <ChevronRight className="h-4 w-4 text-orange-400 shrink-0" />
+        </Link>
+      )}
+
       {/* ── PROFIL CHAUFFEUR ── */}
       <div className="bg-[#1a1a1a] rounded-3xl p-5 border border-white/5">
         <div className="flex items-center gap-4">
