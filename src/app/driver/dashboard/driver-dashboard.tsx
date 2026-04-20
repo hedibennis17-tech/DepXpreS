@@ -6,7 +6,7 @@ import { doc, getDoc, updateDoc, collection, query, where, onSnapshot, serverTim
 import {
   MapPin, Package, DollarSign, Star, Clock,
   Wifi, WifiOff, Navigation, CheckCircle2, Phone,
-  Store, AlertCircle, Loader2, TrendingUp, User
+  Store, AlertCircle, Loader2, TrendingUp, User, ChevronRight
 } from "lucide-react";
 import Link from "next/link";
 
