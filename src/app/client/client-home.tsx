@@ -18,16 +18,21 @@ interface Product {
 }
 
 const HOME_BLOCKS = [
-  { key: "boissons", label: "🥤 Boissons", keywords: ["eau", "soda", "jus", "boisson", "energy", "thé glacé", "café froid", "kombucha"] },
-  { key: "snacks", label: "🍿 Snacks & chips", keywords: ["chips", "craquelin", "nachos", "pop-corn", "noix", "snack", "collation", "barre"] },
-  { key: "alcool", label: "🍺 Alcool & bières", keywords: ["bière", "vin", "alcool", "spiritueux", "cooler", "lager", "ipa", "stout"] },
-  { key: "chocolat", label: "🍫 Chocolat & bonbons", keywords: ["chocolat", "bonbon", "barre", "caramel", "sucette", "gomme", "friandise"] },
-  { key: "tabac", label: "🚬 Tabac & vapotage", keywords: ["cigarette", "cigare", "tabac", "vape", "vapotage", "pod", "nicotine", "briquet"] },
+  { key: "boissons",     label: "🥤 Boissons",         cats: ["boissons"] },
+  { key: "alcool",       label: "🍺 Alcool & bières",   cats: ["alcool"] },
+  { key: "snacks",       label: "🍿 Snacks & chips",    cats: ["snacks", "collations & snacks", "collations"] },
+  { key: "chocolat",     label: "🍫 Chocolat & bonbons",cats: ["chocolat"] },
+  { key: "tabac",        label: "🚬 Tabac & vapotage",  cats: ["tabac"] },
+  { key: "epicerie",     label: "🛒 Épicerie",          cats: ["epicerie", "épicerie"] },
+  { key: "hygiene",      label: "🧴 Hygiène & ménager", cats: ["hygiene", "hygiène"] },
+  { key: "loterie",      label: "🎰 Loterie & divers",  cats: ["loterie"] },
+  { key: "fleurs",       label: "🌸 Fleurs",            cats: ["fleurs"] },
+  { key: "electronique", label: "🔌 Électronique",      cats: ["electronique", "électronique"] },
 ];
 
-function matchBlock(p: Product, keywords: string[]): boolean {
-  const text = [p.name, p.categoryName, p.subcategoryName].join(" ").toLowerCase();
-  return keywords.some(k => text.includes(k.toLowerCase()));
+function matchBlock(p: Product, cats: string[]): boolean {
+  const cat = (p.categoryName || "").toLowerCase();
+  return cats.some(c => cat.includes(c.toLowerCase()));
 }
 
 interface StoreData {
