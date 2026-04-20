@@ -385,6 +385,81 @@ export default function ClientHome() {
           </div>
         )}
 
+        {/* ── BLOCS ARTICLES PAR CATÉGORIE ─────────────────────── */}
+        {homeProducts.length > 0 && (
+          <div className="space-y-4">
+            <div className="flex items-center justify-between">
+              <h2 className="text-lg font-bold text-gray-900">Articles disponibles</h2>
+              <span className="text-xs text-gray-400 bg-gray-100 px-2 py-1 rounded-full">
+                {homeProducts.length} articles
+              </span>
+            </div>
+            {HOME_BLOCKS.map(block => {
+              const blockProducts = homeProducts.filter(p => matchBlock(p, block.cats));
+              if (blockProducts.length === 0) return null;
+              return (
+                <div key={block.key} className="bg-white rounded-2xl border border-gray-100 shadow-sm overflow-hidden">
+                  <div className="flex items-center justify-between px-4 py-3 border-b border-gray-50">
+                    <h3 className="text-sm font-bold text-gray-900">{block.label}</h3>
+                    <span className="text-xs text-gray-400">{blockProducts.length} article{blockProducts.length > 1 ? "s" : ""}</span>
+                  </div>
+                  <div className="flex overflow-x-auto divide-x divide-gray-50 scrollbar-hide">
+                    {blockProducts.slice(0, 8).map(p => (
+                      <Link key={p.id} href={p.storeId ? `/client/store/${p.storeId}` : "/client"}
+                        className="shrink-0 w-36 p-3 flex flex-col gap-2 hover:bg-orange-50/50 transition-colors">
+                        <div className="w-full aspect-square rounded-xl overflow-hidden bg-gray-50 flex items-center justify-center">
+                          {p.imageUrl
+                            ? <img src={p.imageUrl} alt={p.name} className="w-full h-full object-cover" />
+                            : <Package className="h-6 w-6 text-gray-200" />}
+                        </div>
+                        <div>
+                          <p className="text-xs font-bold text-gray-900 line-clamp-2 leading-tight">{p.name}</p>
+                          {p.storeName && <p className="text-[10px] text-gray-400 truncate mt-0.5">{p.storeName}</p>}
+                          <p className="text-xs font-bold text-orange-500 mt-1">${p.price?.toFixed(2)}</p>
+                        </div>
+                      </Link>
+                    ))}
+                  </div>
+                </div>
+              );
+            })}
+
+            {/* Autres articles non catégorisés */}
+            {(() => {
+              const catIds = new Set(HOME_BLOCKS.flatMap(b =>
+                homeProducts.filter(p => matchBlock(p, b.cats)).map(p => p.id)
+              ));
+              const others = homeProducts.filter(p => !catIds.has(p.id));
+              if (others.length === 0) return null;
+              return (
+                <div className="bg-white rounded-2xl border border-gray-100 shadow-sm overflow-hidden">
+                  <div className="flex items-center justify-between px-4 py-3 border-b border-gray-50">
+                    <h3 className="text-sm font-bold text-gray-900">📦 Autres articles</h3>
+                    <span className="text-xs text-gray-400">{others.length} article{others.length > 1 ? "s" : ""}</span>
+                  </div>
+                  <div className="flex overflow-x-auto divide-x divide-gray-50 scrollbar-hide">
+                    {others.slice(0, 8).map(p => (
+                      <Link key={p.id} href={p.storeId ? `/client/store/${p.storeId}` : "/client"}
+                        className="shrink-0 w-36 p-3 flex flex-col gap-2 hover:bg-orange-50/50 transition-colors">
+                        <div className="w-full aspect-square rounded-xl overflow-hidden bg-gray-50 flex items-center justify-center">
+                          {p.imageUrl
+                            ? <img src={p.imageUrl} alt={p.name} className="w-full h-full object-cover" />
+                            : <Package className="h-6 w-6 text-gray-200" />}
+                        </div>
+                        <div>
+                          <p className="text-xs font-bold text-gray-900 line-clamp-2">{p.name}</p>
+                          {p.storeName && <p className="text-[10px] text-gray-400 truncate">{p.storeName}</p>}
+                          <p className="text-xs font-bold text-orange-500">${p.price?.toFixed(2)}</p>
+                        </div>
+                      </Link>
+                    ))}
+                  </div>
+                </div>
+              );
+            })()}
+          </div>
+        )}
+
         {/* ── CTA inscription ────────────────────────────────────── */}
         {!user && (
           <div className="bg-gradient-to-r from-orange-500 to-orange-600 rounded-3xl p-6 text-white relative overflow-hidden">
