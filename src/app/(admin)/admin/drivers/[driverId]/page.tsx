@@ -5,7 +5,7 @@ import {
   ArrowLeft, User, Car, FileText, DollarSign, Shield,
   CheckCircle2, XCircle, Clock, Wifi, WifiOff, Phone,
   Mail, MapPin, Star, Package, Loader2, AlertCircle,
-  Send, RefreshCw, Camera
+  Send, RefreshCw, Camera, Bell
 } from "lucide-react";
 import Link from "next/link";
 
@@ -55,9 +55,39 @@ export default function DriverDetailPage() {
   );
   const [approving, setApproving] = useState(false);
   const [msg, setMsg] = useState<{type:"ok"|"err", text:string}|null>(null);
+  const [notifSubject, setNotifSubject] = useState("");
+  const [notifMessage, setNotifMessage] = useState("");
+  const [sending, setSending] = useState(false);
   const [docApproval, setDocApproval] = useState<Record<string,string>>({});
   const [docComment, setDocComment] = useState<Record<string,string>>({});
   const [savingDoc, setSavingDoc] = useState<Record<string,boolean>>({});
+
+  async function sendNotification() {
+    if (!notifMessage.trim()) return;
+    setSending(true); setMsg(null);
+    try {
+      const res = await fetch("/api/admin/notify", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        credentials: "include",
+        body: JSON.stringify({
+          driverId,
+          driverName: driver?.name,
+          email: driver?.email,
+          phone: driver?.phone,
+          subject: notifSubject || "Notification FastDép",
+          message: notifMessage,
+        }),
+      });
+      const data = await res.json();
+      if (data.ok) {
+        setMsg({ type:"ok", text:`✅ Notification envoyée — SMS: ${data.results?.sms || "—"} | Email: ${data.results?.email || "—"}` });
+        setNotifSubject(""); setNotifMessage("");
+      } else throw new Error(data.error);
+    } catch(e) {
+      setMsg({ type:"err", text: e instanceof Error ? e.message : "Erreur envoi" });
+    } finally { setSending(false); }
+  }
 
   async function saveDocApproval(key: string, status: string) {
     setSavingDoc(prev => ({ ...prev, [key]: true }));
@@ -191,10 +221,11 @@ export default function DriverDetailPage() {
   const allDocsValid = [licenseStatus, insuranceStatus, registrationStatus].every(s => s === "valid");
 
   const TABS = [
-    { id: "profil",    label: "Profil",     icon: User },
-    { id: "vehicule",  label: "Véhicule",   icon: Car },
-    { id: "documents", label: "Documents",  icon: FileText },
-    { id: "paiement",  label: "Paiement",   icon: DollarSign },
+    { id: "profil",       label: "Profil",       icon: User },
+    { id: "vehicule",     label: "Véhicule",     icon: Car },
+    { id: "documents",    label: "Documents",    icon: FileText },
+    { id: "notification", label: "Notifier",     icon: Bell },
+    { id: "paiement",     label: "Paiement",     icon: DollarSign },
   ];
 
   return (
@@ -494,6 +525,80 @@ export default function DriverDetailPage() {
             <button onClick={() => setStatus("rejected")} disabled={approving}
               className="flex items-center justify-center gap-2 bg-red-50 border border-red-200 text-red-600 font-bold py-3 rounded-2xl text-sm hover:bg-red-100 disabled:opacity-50">
               <XCircle className="h-4 w-4" /> Rejeter
+            </button>
+          </div>
+        </div>
+      )}
+
+      {/* ── NOTIFICATION ── */}
+      {tab === "notification" && (
+        <div className="space-y-4">
+          <div className="bg-white rounded-2xl border border-gray-100 shadow-sm p-5 space-y-4">
+            <div className="flex items-center gap-3">
+              <div className="w-10 h-10 bg-orange-100 rounded-xl flex items-center justify-center">
+                <Bell className="h-5 w-5 text-orange-500" />
+              </div>
+              <div>
+                <p className="text-sm font-bold text-gray-900">Envoyer une notification</p>
+                <p className="text-xs text-gray-400">SMS + Email + Notification in-app</p>
+              </div>
+            </div>
+
+            {/* Destinataire */}
+            <div className="bg-gray-50 rounded-xl p-3 space-y-1.5">
+              <div className="flex justify-between text-sm">
+                <span className="text-gray-400">Chauffeur</span>
+                <span className="font-semibold text-gray-900">{driver.name}</span>
+              </div>
+              <div className="flex justify-between text-sm">
+                <span className="text-gray-400">📧 Email</span>
+                <span className="font-semibold text-gray-900">{driver.email}</span>
+              </div>
+              <div className="flex justify-between text-sm">
+                <span className="text-gray-400">📱 SMS</span>
+                <span className="font-semibold text-gray-900">{driver.phone || "Non renseigné"}</span>
+              </div>
+            </div>
+
+            {/* Messages rapides */}
+            <div>
+              <p className="text-xs text-gray-400 mb-2 font-semibold">Messages rapides</p>
+              <div className="flex flex-wrap gap-2">
+                {[
+                  { label: "✅ Compte approuvé", msg: "Votre compte chauffeur FastDép a été approuvé ! Vous pouvez maintenant recevoir des livraisons." },
+                  { label: "📄 Document requis", msg: "Un ou plusieurs de vos documents nécessitent une mise à jour. Veuillez vous connecter à l'application." },
+                  { label: "❌ Document rejeté", msg: "Un de vos documents a été rejeté. Veuillez téléverser un nouveau document dans l'application." },
+                  { label: "⚠️ Compte suspendu", msg: "Votre compte a été temporairement suspendu. Contactez notre support pour plus d'informations." },
+                ].map(t => (
+                  <button key={t.label} onClick={() => { setNotifMessage(t.msg); setNotifSubject(t.label.replace(/[✅📄❌⚠️]/g,"").trim()); }}
+                    className="text-xs bg-orange-50 border border-orange-200 text-orange-700 font-semibold px-3 py-1.5 rounded-xl hover:bg-orange-100 transition-colors">
+                    {t.label}
+                  </button>
+                ))}
+              </div>
+            </div>
+
+            {/* Sujet */}
+            <div>
+              <label className="text-xs text-gray-400 mb-1.5 block font-semibold">Sujet</label>
+              <input value={notifSubject} onChange={e => setNotifSubject(e.target.value)}
+                placeholder="Ex: Mise à jour de votre compte"
+                className="w-full border border-gray-200 rounded-xl px-4 py-2.5 text-sm outline-none focus:border-orange-400 transition-colors" />
+            </div>
+
+            {/* Message */}
+            <div>
+              <label className="text-xs text-gray-400 mb-1.5 block font-semibold">Message *</label>
+              <textarea value={notifMessage} onChange={e => setNotifMessage(e.target.value)}
+                placeholder="Votre message au chauffeur..."
+                rows={4}
+                className="w-full border border-gray-200 rounded-xl px-4 py-2.5 text-sm outline-none focus:border-orange-400 transition-colors resize-none" />
+            </div>
+
+            {/* Bouton envoyer */}
+            <button onClick={sendNotification} disabled={sending || !notifMessage.trim()}
+              className="w-full flex items-center justify-center gap-2 bg-orange-500 hover:bg-orange-600 text-white font-bold py-3.5 rounded-2xl text-sm transition-colors disabled:opacity-50">
+              {sending ? <><Loader2 className="h-4 w-4 animate-spin" />Envoi en cours...</> : <><Send className="h-4 w-4" />Envoyer SMS + Email + Notification</>}
             </button>
           </div>
         </div>
