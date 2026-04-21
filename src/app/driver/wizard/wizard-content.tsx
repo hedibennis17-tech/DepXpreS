@@ -2,6 +2,7 @@
 import { useState, useRef } from "react";
 import { useRouter } from "next/navigation";
 import { auth } from "@/lib/firebase";
+import { getIdToken } from "firebase/auth";
 import { onAuthStateChanged } from "firebase/auth";
 import { useEffect } from "react";
 import {
@@ -22,27 +23,14 @@ const CURRENT_YEAR = new Date().getFullYear();
 const MIN_YEAR = CURRENT_YEAR - 10; // Max 10 ans
 
 interface FormData {
-  // Profil
-  phone: string;
-  address: string;
-  city: string;
-  postalCode: string;
-  zone_id: string;
-  photoUrl: string;
-  // Véhicule
-  vehicle_type: string;
-  vehicle_make: string;
-  vehicle_model: string;
-  vehicle_year: string;
-  vehicle_color: string;
-  vehicle_plate: string;
-  // Documents
-  license_number: string;
-  license_expiry: string;
-  insurance_provider: string;
-  insurance_policy: string;
-  insurance_expiry: string;
+  phone: string; address: string; city: string; postalCode: string;
+  zone_id: string; photoUrl: string;
+  vehicle_type: string; vehicle_make: string; vehicle_model: string;
+  vehicle_year: string; vehicle_color: string; vehicle_plate: string;
+  license_number: string; license_expiry: string;
+  insurance_provider: string; insurance_policy: string; insurance_expiry: string;
   registration_expiry: string;
+  license_doc_url: string; insurance_doc_url: string; registration_doc_url: string;
 }
 
 const EMPTY: FormData = {
@@ -76,6 +64,15 @@ export default function DriverWizard() {
   const [photoPreview, setPhotoPreview] = useState("");
   const [uploading, setUploading] = useState(false);
   const photoRef = useRef<HTMLInputElement>(null);
+  const licenseRef = useRef<HTMLInputElement>(null);
+  const insuranceRef = useRef<HTMLInputElement>(null);
+  const registrationRef = useRef<HTMLInputElement>(null);
+
+  const [docFiles, setDocFiles] = useState({
+    license:      { preview: "", url: "", uploading: false },
+    insurance:    { preview: "", url: "", uploading: false },
+    registration: { preview: "", url: "", uploading: false },
+  });
 
   useEffect(() => {
     const unsub = onAuthStateChanged(auth, u => {
@@ -119,19 +116,51 @@ export default function DriverWizard() {
     setStep(s => s + 1);
   }
 
+  async function getToken(): Promise<HeadersInit> {
+    const user = auth.currentUser;
+    if (!user) return {};
+    try { return { "Authorization": `Bearer ${await getIdToken(user)}` }; }
+    catch { return {}; }
+  }
+
   async function handlePhotoUpload(e: React.ChangeEvent<HTMLInputElement>) {
-    const file = e.target.files?.[0];
-    if (!file) return;
+    const file = e.target.files?.[0]; if (!file) return;
     setUploading(true);
     try {
       setPhotoPreview(URL.createObjectURL(file));
-      const fd = new FormData();
-      fd.append("file", file);
-      const res = await fetch("/api/store/upload", { method: "POST", credentials: "include", body: fd });
+      const fd = new FormData(); fd.append("file", file);
+      const headers = await getToken();
+      const res = await fetch("/api/driver/upload", { method:"POST", headers, body: fd });
       const data = await res.json();
       if (data.ok) set("photoUrl", data.imageUrl);
+      else console.error("Photo upload:", data.error);
     } catch(e){ console.error(e); }
     finally { setUploading(false); }
+  }
+
+  async function handleDocUpload(
+    e: React.ChangeEvent<HTMLInputElement>,
+    key: "license" | "insurance" | "registration",
+    formKey: string
+  ) {
+    const file = e.target.files?.[0]; if (!file) return;
+    const preview = URL.createObjectURL(file);
+    setDocFiles(prev => ({ ...prev, [key]: { preview, url: "", uploading: true } }));
+    try {
+      const fd = new FormData(); fd.append("file", file);
+      const headers = await getToken();
+      const res = await fetch("/api/driver/upload", { method:"POST", headers, body: fd });
+      const data = await res.json();
+      if (data.ok) {
+        setDocFiles(prev => ({ ...prev, [key]: { preview, url: data.imageUrl, uploading: false } }));
+        set(formKey as any, data.imageUrl);
+      } else {
+        setDocFiles(prev => ({ ...prev, [key]: { preview, url: "", uploading: false } }));
+        setError("Erreur upload: " + data.error);
+      }
+    } catch {
+      setDocFiles(prev => ({ ...prev, [key]: { preview, url: "", uploading: false } }));
+    }
   }
 
   async function handleSubmit() {

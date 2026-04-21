@@ -1,6 +1,7 @@
 "use client";
 import { useState, useEffect } from "react";
 import { auth, db } from "@/lib/firebase";
+import { ACTIVE_ZONES, type DeliveryZone } from "@/lib/delivery-zones";
 import { onAuthStateChanged } from "firebase/auth";
 import { doc, getDoc, updateDoc, collection, query, where, onSnapshot, serverTimestamp } from "firebase/firestore";
 import {
@@ -52,6 +53,30 @@ export default function DriverDashboard() {
   const [activeOrder, setActiveOrder] = useState<ActiveOrder | null>(null);
   const [todayStats, setTodayStats] = useState({ deliveries: 0, earnings: 0 });
   const [toggling, setToggling] = useState(false);
+  const [showZonePicker, setShowZonePicker] = useState(false);
+  const [activeZone, setActiveZone] = useState<DeliveryZone | null>(null);
+  const [locationGranted, setLocationGranted] = useState(false);
+
+  // Demander GPS au montage
+  useEffect(() => {
+    if (navigator.geolocation) {
+      navigator.geolocation.getCurrentPosition(
+        (pos) => {
+          setLocationGranted(true);
+          // Mettre à jour position dans Firestore
+          if (auth.currentUser) {
+            updateDoc(doc(db, "driver_profiles", auth.currentUser.uid), {
+              last_lat: pos.coords.latitude,
+              last_lng: pos.coords.longitude,
+              last_location_at: serverTimestamp(),
+            }).catch(() => {});
+          }
+        },
+        () => setLocationGranted(false),
+        { enableHighAccuracy: true }
+      );
+    }
+  }, []);
 
   useEffect(() => {
     const unsub = onAuthStateChanged(auth, async (user) => {
@@ -225,6 +250,55 @@ export default function DriverDashboard() {
             : <div className="w-5 h-5 bg-white rounded-full shadow" />}
         </div>
       </button>
+
+      {/* ── SÉLECTEUR DE ZONE ── */}
+      <div className="bg-[#1a1a1a] rounded-2xl border border-white/5 p-4">
+        <div className="flex items-center justify-between mb-2">
+          <div className="flex items-center gap-2">
+            <MapPin className="h-4 w-4 text-orange-400" />
+            <span className="text-sm font-bold text-white">Zone active</span>
+          </div>
+          <div className="flex items-center gap-1.5 text-xs text-gray-500">
+            <span className={`w-1.5 h-1.5 rounded-full ${locationGranted ? "bg-green-500 animate-pulse" : "bg-gray-600"}`} />
+            {locationGranted ? "GPS actif" : "GPS inactif"}
+          </div>
+        </div>
+        <button onClick={() => setShowZonePicker(v => !v)}
+          className="w-full flex items-center justify-between bg-[#111] border border-white/10 rounded-xl px-4 py-3 text-sm hover:border-orange-500/40 transition-colors">
+          <span className={activeZone ? "text-white font-semibold" : "text-gray-500"}>
+            {activeZone?.name || driver?.zone_name || "Choisir votre zone de livraison"}
+          </span>
+          <ChevronRight className={`h-4 w-4 text-gray-500 transition-transform ${showZonePicker ? "rotate-90" : ""}`} />
+        </button>
+        {showZonePicker && (
+          <div className="mt-2 bg-[#111] border border-white/10 rounded-xl overflow-hidden max-h-56 overflow-y-auto">
+            {["laval","montreal","longueuil"].map(g => (
+              <div key={g}>
+                <div className="px-4 py-2 bg-white/5 text-[10px] font-bold text-gray-500 uppercase tracking-wider border-b border-white/5">
+                  {g === "laval" ? "🏙️ Laval" : g === "montreal" ? "🗺️ Montréal" : "🌉 Longueuil"}
+                </div>
+                {ACTIVE_ZONES.filter(z => z.delivery_zone_group === g).map(z => (
+                  <button key={z.id} onClick={async () => {
+                    setActiveZone(z);
+                    setShowZonePicker(false);
+                    if (driver?.uid) {
+                      await updateDoc(doc(db, "driver_profiles", driver.uid), {
+                        current_zone_id: z.id, zone_name: z.name, updated_at: serverTimestamp()
+                      }).catch(() => {});
+                    }
+                  }}
+                    className={`w-full flex items-center justify-between px-4 py-2.5 text-left hover:bg-white/5 transition-colors border-b border-white/5 last:border-0 ${
+                      (activeZone?.id === z.id || (!activeZone && driver?.current_zone_id === z.id)) ? "text-orange-400" : "text-gray-300"
+                    }`}>
+                    <span className="text-sm">{z.name}</span>
+                    <span className="text-[10px] text-gray-500">{z.estimated_time_min}-{z.estimated_time_max} min</span>
+                  </button>
+                ))}
+              </div>
+            ))}
+          </div>
+        )}
+      </div>
 
       {/* ── STATS DU JOUR ── */}
       <div className="grid grid-cols-3 gap-3">

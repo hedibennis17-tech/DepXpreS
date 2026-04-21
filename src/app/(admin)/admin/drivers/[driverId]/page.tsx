@@ -1,6 +1,6 @@
 "use client";
 import { useState, useEffect } from "react";
-import { useParams, useRouter, useSearchParams } from "next/navigation";
+import { useParams, useRouter } from "next/navigation";
 import {
   ArrowLeft, User, Car, FileText, DollarSign, Shield,
   CheckCircle2, XCircle, Clock, Wifi, WifiOff, Phone,
@@ -50,9 +50,8 @@ export default function DriverDetailPage() {
 
   const [driver, setDriver] = useState<Driver | null>(null);
   const [loading, setLoading] = useState(true);
-  const searchParamsHook = useSearchParams();
   const [tab, setTab] = useState<"profil"|"vehicule"|"documents"|"paiement">(
-    (searchParamsHook.get("tab") as any) || "profil"
+    ((typeof window !== "undefined" ? new URLSearchParams(window.location.search).get("tab") : null) as any) || "profil"
   );
   const [approving, setApproving] = useState(false);
   const [msg, setMsg] = useState<{type:"ok"|"err", text:string}|null>(null);
@@ -309,7 +308,24 @@ export default function DriverDetailPage() {
       {/* ── DOCUMENTS ── */}
       {tab === "documents" && (
         <div className="space-y-4">
-          {/* Permis */}
+          {/* Résumé statut */}
+          <div className={`p-4 rounded-2xl border flex items-center gap-3 ${
+            allDocsValid ? "bg-green-50 border-green-200" : "bg-yellow-50 border-yellow-200"
+          }`}>
+            {allDocsValid
+              ? <CheckCircle2 className="h-5 w-5 text-green-600 shrink-0" />
+              : <AlertCircle className="h-5 w-5 text-yellow-600 shrink-0" />}
+            <div>
+              <p className={`text-sm font-bold ${allDocsValid ? "text-green-700" : "text-yellow-700"}`}>
+                {allDocsValid ? "✅ Tous les documents sont valides" : "⚠️ Certains documents nécessitent attention"}
+              </p>
+              <p className={`text-xs ${allDocsValid ? "text-green-600" : "text-yellow-600"}`}>
+                Vérifiez les photos avant d&apos;approuver le chauffeur
+              </p>
+            </div>
+          </div>
+
+          {/* 3 documents */}
           {[
             {
               title: "🪪 Permis de conduire",
@@ -317,6 +333,7 @@ export default function DriverDetailPage() {
                 { label: "Numéro", value: driver.license_number },
                 { label: "Expiration", value: driver.license_expiry },
               ],
+              docUrl: driver.license_doc_url,
               status: licenseStatus,
             },
             {
@@ -326,31 +343,67 @@ export default function DriverDetailPage() {
                 { label: "Numéro police", value: driver.insurance_policy },
                 { label: "Expiration", value: driver.insurance_expiry },
               ],
+              docUrl: driver.insurance_doc_url,
               status: insuranceStatus,
             },
             {
-              title: "📋 Immatriculation",
+              title: "📋 Immatriculation véhicule",
               fields: [
                 { label: "Expiration certificat", value: driver.registration_expiry },
               ],
+              docUrl: driver.registration_doc_url,
               status: registrationStatus,
             },
           ].map(doc => {
             const ui = DOC_STATUS_UI[doc.status];
             const Icon = ui.icon;
             return (
-              <div key={doc.title} className={`bg-white rounded-2xl border shadow-sm p-5 ${doc.status !== "valid" ? "border-yellow-200" : "border-gray-100"}`}>
-                <div className="flex items-center justify-between mb-4">
+              <div key={doc.title} className={`bg-white rounded-2xl border shadow-sm overflow-hidden ${
+                doc.status === "expired" ? "border-red-200" :
+                doc.status === "expiring" ? "border-yellow-200" : "border-gray-100"
+              }`}>
+                {/* Header */}
+                <div className="flex items-center justify-between px-5 py-4 border-b border-gray-50">
                   <h3 className="text-sm font-bold text-gray-900">{doc.title}</h3>
-                  <span className={`flex items-center gap-1 text-xs font-semibold px-2 py-1 rounded-full border ${ui.bg} ${ui.color}`}>
+                  <span className={`flex items-center gap-1 text-xs font-semibold px-2.5 py-1 rounded-full border ${ui.bg} ${ui.color}`}>
                     <Icon className="h-3 w-3" />{ui.label}
                   </span>
                 </div>
-                <div className="space-y-2">
+
+                {/* Photo du document — GRANDE et cliquable */}
+                <div className="px-5 pt-4">
+                  {doc.docUrl ? (
+                    <a href={doc.docUrl} target="_blank" rel="noopener noreferrer"
+                      className="block group relative">
+                      <img
+                        src={doc.docUrl}
+                        alt={doc.title}
+                        className="w-full h-48 object-cover rounded-xl border border-gray-100 group-hover:opacity-95 transition-opacity"
+                        onError={e => { (e.target as HTMLImageElement).style.display="none"; }}
+                      />
+                      <div className="absolute inset-0 bg-black/0 group-hover:bg-black/10 rounded-xl transition-colors flex items-center justify-center opacity-0 group-hover:opacity-100">
+                        <span className="bg-white text-gray-800 text-xs font-bold px-3 py-1.5 rounded-full shadow-lg">
+                          🔍 Voir en plein écran ↗
+                        </span>
+                      </div>
+                    </a>
+                  ) : (
+                    <div className="w-full h-48 rounded-xl border-2 border-dashed border-gray-200 flex flex-col items-center justify-center gap-2 bg-gray-50">
+                      <AlertCircle className="h-8 w-8 text-gray-300" />
+                      <p className="text-sm text-gray-400 font-medium">Document non téléversé</p>
+                      <p className="text-xs text-gray-300">Le chauffeur doit téléverser ce document</p>
+                    </div>
+                  )}
+                </div>
+
+                {/* Infos */}
+                <div className="px-5 py-4 space-y-2">
                   {doc.fields.map(f => (
                     <div key={f.label} className="flex justify-between text-sm">
                       <span className="text-gray-400">{f.label}</span>
-                      <span className={`font-semibold ${f.value ? "text-gray-900" : "text-gray-300"}`}>{f.value || "Non renseigné"}</span>
+                      <span className={`font-semibold ${f.value ? "text-gray-900" : "text-red-400"}`}>
+                        {f.value || "⚠️ Non renseigné"}
+                      </span>
                     </div>
                   ))}
                 </div>
@@ -358,12 +411,18 @@ export default function DriverDetailPage() {
             );
           })}
 
-          {/* Bouton approuver en bas des documents */}
-          <button onClick={() => setStatus("approved")} disabled={approving}
-            className="w-full flex items-center justify-center gap-2 bg-green-500 hover:bg-green-600 text-white font-bold py-3 rounded-2xl text-sm transition-colors disabled:opacity-50">
-            {approving ? <Loader2 className="h-4 w-4 animate-spin" /> : <CheckCircle2 className="h-4 w-4" />}
-            Approuver après vérification des documents
-          </button>
+          {/* Boutons action */}
+          <div className="grid grid-cols-2 gap-3">
+            <button onClick={() => setStatus("approved")} disabled={approving}
+              className="flex items-center justify-center gap-2 bg-green-500 hover:bg-green-600 text-white font-bold py-3.5 rounded-2xl text-sm transition-colors disabled:opacity-50">
+              {approving ? <Loader2 className="h-4 w-4 animate-spin" /> : <CheckCircle2 className="h-4 w-4" />}
+              ✅ Approuver
+            </button>
+            <button onClick={() => setStatus("rejected")} disabled={approving}
+              className="flex items-center justify-center gap-2 bg-red-50 border border-red-200 text-red-600 font-bold py-3.5 rounded-2xl text-sm transition-colors hover:bg-red-100 disabled:opacity-50">
+              <XCircle className="h-4 w-4" /> ❌ Rejeter
+            </button>
+          </div>
         </div>
       )}
 

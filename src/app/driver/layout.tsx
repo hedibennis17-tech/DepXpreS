@@ -5,12 +5,12 @@ import { onAuthStateChanged, signOut } from "firebase/auth";
 import { doc, getDoc } from "firebase/firestore";
 import { auth, db } from "@/lib/firebase";
 import Link from "next/link";
-import { Map, Package, Clock, DollarSign, User, Menu, X, Zap, LogOut, Bell, ChevronRight } from "lucide-react";
+import { Map, Package, Clock, DollarSign, User, Menu, X, Zap, LogOut, Bell, ChevronRight, FileText } from "lucide-react";
 
 const NAV = [
   { href: "/driver/dashboard", label: "Dashboard",  icon: Map },
   { href: "/driver/orders",    label: "Livraisons", icon: Package },
-  { href: "/driver/history",   label: "Historique", icon: Clock },
+  { href: "/driver/documents", label: "Documents",  icon: FileText },
   { href: "/driver/earnings",  label: "Gains",      icon: DollarSign },
   { href: "/driver/profile",   label: "Profil",     icon: User },
 ];

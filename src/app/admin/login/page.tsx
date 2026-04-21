@@ -1,7 +1,7 @@
 "use client";
 
 import { Suspense, useState } from "react";
-import { useRouter, useSearchParams } from "next/navigation";
+import { useRouter } from "next/navigation";
 import {
   browserLocalPersistence,
   setPersistence,
@@ -49,8 +49,7 @@ function getUserFriendlyMessage(code: string): string {
 
 function AdminLoginForm() {
   const router = useRouter();
-  const searchParams = useSearchParams();
-  const redirect = searchParams.get("redirect") || "/admin/dashboard";
+  const redirect = (typeof window !== "undefined" ? new URLSearchParams(window.location.search).get("redirect") : null) || "/admin/dashboard";
 
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");

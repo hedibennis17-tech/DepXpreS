@@ -15,7 +15,7 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/com
 import { Badge } from "@/components/ui/badge"
 import { ArrowLeft, CheckCircle, Store, Shield, Truck, Headphones, Settings } from "lucide-react"
 import Link from "next/link"
-import { useRouter, useSearchParams } from "next/navigation"
+import { useRouter } from "next/navigation"
 import { Suspense } from "react"
 
 interface StoreOption {
@@ -64,8 +64,7 @@ const ROLE_CONFIG: Record<string, {
 
 function CreateUserForm() {
   const router = useRouter()
-  const searchParams = useSearchParams()
-  const defaultRole = searchParams.get("role") || ""
+  const defaultRole = (typeof window !== "undefined" ? new URLSearchParams(window.location.search).get("role") : null) || ""
 
   const [form, setForm] = useState({
     firstName: "",

@@ -1,12 +1,11 @@
 'use client';
 import { useState, useEffect } from 'react';
-import { useSearchParams, useRouter } from 'next/navigation';
+import { useRouter } from 'next/navigation';
 import { Suspense } from 'react';
 
 function ManualDispatchContent() {
-  const searchParams = useSearchParams();
   const router = useRouter();
-  const dispatchId = searchParams.get('dispatchId') || '';
+  const dispatchId = (typeof window !== "undefined" ? new URLSearchParams(window.location.search).get('dispatchId') : null) || '';
   const [candidates, setCandidates] = useState<any[]>([]);
   const [queue, setQueue] = useState<any[]>([]);
   const [selectedDispatch, setSelectedDispatch] = useState(dispatchId);
