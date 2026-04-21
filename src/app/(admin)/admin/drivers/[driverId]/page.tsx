@@ -55,6 +55,27 @@ export default function DriverDetailPage() {
   );
   const [approving, setApproving] = useState(false);
   const [msg, setMsg] = useState<{type:"ok"|"err", text:string}|null>(null);
+  const [docApproval, setDocApproval] = useState<Record<string,string>>({});
+  const [docComment, setDocComment] = useState<Record<string,string>>({});
+  const [savingDoc, setSavingDoc] = useState<Record<string,boolean>>({});
+
+  async function saveDocApproval(key: string, status: string) {
+    setSavingDoc(prev => ({ ...prev, [key]: true }));
+    try {
+      await fetch(`/api/admin/drivers/${driverId}`, {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        credentials: "include",
+        body: JSON.stringify({
+          [`${key}_status`]: status,
+          [`${key}_comment`]: docComment[key] || "",
+        }),
+      });
+      setDocApproval(prev => ({ ...prev, [key]: status }));
+      setMsg({ type:"ok", text: `✅ ${key === "license" ? "Permis" : key === "insurance" ? "Assurance" : "Immatriculation"} ${status === "approved" ? "approuvé" : "rejeté"}` });
+    } catch { setMsg({ type:"err", text:"Erreur" }); }
+    finally { setSavingDoc(prev => ({ ...prev, [key]: false })); }
+  }
 
   // Paiement
   const [payAmount, setPayAmount] = useState("");
@@ -68,7 +89,19 @@ export default function DriverDetailPage() {
     try {
       const res = await fetch(`/api/admin/drivers/${driverId}`, { credentials: "include" });
       const data = await res.json();
-      if (data.driver) setDriver(data.driver);
+      if (data.driver) {
+        setDriver(data.driver);
+        setDocApproval({
+          license: data.driver.license_status || "pending",
+          insurance: data.driver.insurance_status || "pending",
+          registration: data.driver.registration_status || "pending",
+        });
+        setDocComment({
+          license: data.driver.license_comment || "",
+          insurance: data.driver.insurance_comment || "",
+          registration: data.driver.registration_comment || "",
+        });
+      }
     } catch(e) { console.error(e); }
     finally { setLoading(false); }
   }
@@ -328,6 +361,7 @@ export default function DriverDetailPage() {
           {/* 3 documents */}
           {[
             {
+              key: "license",
               title: "🪪 Permis de conduire",
               fields: [
                 { label: "Numéro", value: driver.license_number },
@@ -337,6 +371,7 @@ export default function DriverDetailPage() {
               status: licenseStatus,
             },
             {
+              key: "insurance",
               title: "🛡️ Assurance automobile",
               fields: [
                 { label: "Assureur", value: driver.insurance_provider },
@@ -347,6 +382,7 @@ export default function DriverDetailPage() {
               status: insuranceStatus,
             },
             {
+              key: "registration",
               title: "📋 Immatriculation véhicule",
               fields: [
                 { label: "Expiration certificat", value: driver.registration_expiry },
@@ -357,70 +393,107 @@ export default function DriverDetailPage() {
           ].map(doc => {
             const ui = DOC_STATUS_UI[doc.status];
             const Icon = ui.icon;
+            const approval = docApproval[doc.key] || "pending";
+            const isSaving = savingDoc[doc.key];
             return (
-              <div key={doc.title} className={`bg-white rounded-2xl border shadow-sm overflow-hidden ${
-                doc.status === "expired" ? "border-red-200" :
-                doc.status === "expiring" ? "border-yellow-200" : "border-gray-100"
+              <div key={doc.key} className={`bg-white rounded-2xl border shadow-sm overflow-hidden ${
+                approval === "approved" ? "border-green-200" :
+                approval === "rejected" ? "border-red-200" : "border-gray-100"
               }`}>
                 {/* Header */}
                 <div className="flex items-center justify-between px-5 py-4 border-b border-gray-50">
                   <h3 className="text-sm font-bold text-gray-900">{doc.title}</h3>
-                  <span className={`flex items-center gap-1 text-xs font-semibold px-2.5 py-1 rounded-full border ${ui.bg} ${ui.color}`}>
-                    <Icon className="h-3 w-3" />{ui.label}
-                  </span>
+                  <div className="flex items-center gap-2">
+                    <span className={`flex items-center gap-1 text-xs font-semibold px-2 py-1 rounded-full border ${ui.bg} ${ui.color}`}>
+                      <Icon className="h-3 w-3" />{ui.label}
+                    </span>
+                    <span className={`text-xs font-bold px-2 py-1 rounded-full ${
+                      approval === "approved" ? "bg-green-100 text-green-700" :
+                      approval === "rejected" ? "bg-red-100 text-red-700" :
+                      "bg-gray-100 text-gray-500"
+                    }`}>
+                      {approval === "approved" ? "✅ Approuvé" : approval === "rejected" ? "❌ Rejeté" : "⏳ En attente"}
+                    </span>
+                  </div>
                 </div>
 
-                {/* Photo du document — GRANDE et cliquable */}
+                {/* Photo */}
                 <div className="px-5 pt-4">
                   {doc.docUrl ? (
-                    <a href={doc.docUrl} target="_blank" rel="noopener noreferrer"
-                      className="block group relative">
-                      <img
-                        src={doc.docUrl}
-                        alt={doc.title}
-                        className="w-full h-48 object-cover rounded-xl border border-gray-100 group-hover:opacity-95 transition-opacity"
-                        onError={e => { (e.target as HTMLImageElement).style.display="none"; }}
-                      />
-                      <div className="absolute inset-0 bg-black/0 group-hover:bg-black/10 rounded-xl transition-colors flex items-center justify-center opacity-0 group-hover:opacity-100">
-                        <span className="bg-white text-gray-800 text-xs font-bold px-3 py-1.5 rounded-full shadow-lg">
-                          🔍 Voir en plein écran ↗
-                        </span>
+                    <a href={doc.docUrl} target="_blank" rel="noopener noreferrer" className="block group relative">
+                      <img src={doc.docUrl} alt={doc.title}
+                        className="w-full h-48 object-contain rounded-xl border border-gray-100 bg-gray-50 group-hover:opacity-95 transition-opacity"
+                        onError={e => { (e.target as HTMLImageElement).style.display="none"; }} />
+                      <div className="absolute inset-0 bg-black/0 group-hover:bg-black/10 rounded-xl flex items-center justify-center opacity-0 group-hover:opacity-100 transition-all">
+                        <span className="bg-white text-gray-800 text-xs font-bold px-3 py-1.5 rounded-full shadow-lg">🔍 Voir en plein écran ↗</span>
                       </div>
                     </a>
                   ) : (
-                    <div className="w-full h-48 rounded-xl border-2 border-dashed border-gray-200 flex flex-col items-center justify-center gap-2 bg-gray-50">
+                    <div className="w-full h-40 rounded-xl border-2 border-dashed border-gray-200 flex flex-col items-center justify-center gap-2 bg-gray-50">
                       <AlertCircle className="h-8 w-8 text-gray-300" />
                       <p className="text-sm text-gray-400 font-medium">Document non téléversé</p>
-                      <p className="text-xs text-gray-300">Le chauffeur doit téléverser ce document</p>
                     </div>
                   )}
                 </div>
 
                 {/* Infos */}
-                <div className="px-5 py-4 space-y-2">
+                <div className="px-5 pt-3 space-y-1.5">
                   {doc.fields.map(f => (
                     <div key={f.label} className="flex justify-between text-sm">
                       <span className="text-gray-400">{f.label}</span>
-                      <span className={`font-semibold ${f.value ? "text-gray-900" : "text-red-400"}`}>
-                        {f.value || "⚠️ Non renseigné"}
-                      </span>
+                      <span className={`font-semibold ${f.value ? "text-gray-900" : "text-red-400"}`}>{f.value || "⚠️ Non renseigné"}</span>
                     </div>
                   ))}
+                </div>
+
+                {/* Commentaire admin */}
+                <div className="px-5 pt-3">
+                  <textarea
+                    value={docComment[doc.key] || ""}
+                    onChange={e => setDocComment(prev => ({ ...prev, [doc.key]: e.target.value }))}
+                    placeholder="Commentaire au chauffeur (ex: photo floue, document expiré...)"
+                    rows={2}
+                    className="w-full border border-gray-200 rounded-xl px-3 py-2 text-sm outline-none focus:border-orange-400 resize-none text-gray-700 placeholder-gray-300"
+                  />
+                </div>
+
+                {/* Boutons approbation individuelle */}
+                <div className="px-5 py-4 grid grid-cols-2 gap-2">
+                  <button onClick={() => saveDocApproval(doc.key, "approved")}
+                    disabled={isSaving || approval === "approved"}
+                    className={`flex items-center justify-center gap-2 font-bold py-2.5 rounded-xl text-sm transition-all ${
+                      approval === "approved"
+                        ? "bg-green-100 text-green-600 border border-green-200 cursor-default"
+                        : "bg-green-500 hover:bg-green-600 text-white"
+                    } disabled:opacity-60`}>
+                    {isSaving ? <Loader2 className="h-4 w-4 animate-spin" /> : <CheckCircle2 className="h-4 w-4" />}
+                    {approval === "approved" ? "Approuvé ✅" : "Approuver"}
+                  </button>
+                  <button onClick={() => saveDocApproval(doc.key, "rejected")}
+                    disabled={isSaving || approval === "rejected"}
+                    className={`flex items-center justify-center gap-2 font-bold py-2.5 rounded-xl text-sm transition-all ${
+                      approval === "rejected"
+                        ? "bg-red-100 text-red-600 border border-red-200 cursor-default"
+                        : "bg-red-50 border border-red-200 text-red-600 hover:bg-red-100"
+                    } disabled:opacity-60`}>
+                    {isSaving ? <Loader2 className="h-4 w-4 animate-spin" /> : <XCircle className="h-4 w-4" />}
+                    {approval === "rejected" ? "Rejeté ❌" : "Rejeter"}
+                  </button>
                 </div>
               </div>
             );
           })}
 
-          {/* Boutons action */}
-          <div className="grid grid-cols-2 gap-3">
+          {/* Approbation globale */}
+          <div className="grid grid-cols-2 gap-3 pt-2 border-t border-gray-100">
             <button onClick={() => setStatus("approved")} disabled={approving}
-              className="flex items-center justify-center gap-2 bg-green-500 hover:bg-green-600 text-white font-bold py-3.5 rounded-2xl text-sm transition-colors disabled:opacity-50">
+              className="flex items-center justify-center gap-2 bg-green-500 hover:bg-green-600 text-white font-bold py-3 rounded-2xl text-sm transition-colors disabled:opacity-50">
               {approving ? <Loader2 className="h-4 w-4 animate-spin" /> : <CheckCircle2 className="h-4 w-4" />}
-              ✅ Approuver
+              Approuver le chauffeur
             </button>
             <button onClick={() => setStatus("rejected")} disabled={approving}
-              className="flex items-center justify-center gap-2 bg-red-50 border border-red-200 text-red-600 font-bold py-3.5 rounded-2xl text-sm transition-colors hover:bg-red-100 disabled:opacity-50">
-              <XCircle className="h-4 w-4" /> ❌ Rejeter
+              className="flex items-center justify-center gap-2 bg-red-50 border border-red-200 text-red-600 font-bold py-3 rounded-2xl text-sm hover:bg-red-100 disabled:opacity-50">
+              <XCircle className="h-4 w-4" /> Rejeter
             </button>
           </div>
         </div>
