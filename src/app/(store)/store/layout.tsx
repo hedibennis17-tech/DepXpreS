@@ -9,7 +9,7 @@ import Link from "next/link";
 import {
   LayoutDashboard, ShoppingBag, Package, Calendar,
   DollarSign, Bell, User, LogOut, Store, Menu, X,
-  ChevronRight, Zap, TrendingUp
+  ChevronRight, Zap, TrendingUp, MessageCircle
 } from "lucide-react";
 
 const NAV = [
@@ -19,6 +19,7 @@ const NAV = [
   { href: "/store/schedule",      label: "Horaires",         icon: Calendar,        badge: null },
   { href: "/store/settlements",   label: "Paiements",        icon: DollarSign,      badge: null },
   { href: "/store/notifications", label: "Notifications",    icon: Bell,            badge: null },
+  { href: "/store/messages",      label: "Messages Admin",   icon: MessageCircle,   badge: null },
   { href: "/store/profile",       label: "Mon profil",       icon: User,            badge: null },
 ];
 
@@ -33,6 +34,7 @@ export default function StoreLayout({ children }: { children: React.ReactNode })
   const [user, setUser] = useState<StoreUser | null>(null);
   const [loading, setLoading] = useState(true);
   const [sidebarOpen, setSidebarOpen] = useState(false);
+  const [menuOpen, setMenuOpen] = useState(false);
 
   useEffect(() => {
     const unsub = onAuthStateChanged(auth, async (firebaseUser) => {
@@ -174,10 +176,47 @@ export default function StoreLayout({ children }: { children: React.ReactNode })
             <Link href="/store/notifications" className="p-2 rounded-xl hover:bg-white/5 relative">
               <Bell className="h-4.5 w-4.5 text-gray-400" />
             </Link>
-            <div className="w-8 h-8 rounded-xl bg-orange-500/20 border border-orange-500/30 flex items-center justify-center">
-              <span className="text-orange-400 text-xs font-bold">
-                {user?.storeName?.[0]?.toUpperCase() || "S"}
-              </span>
+            <div className="relative">
+              <button onClick={() => setMenuOpen(v => !v)}
+                className="w-9 h-9 rounded-xl bg-orange-500/20 border border-orange-500/30 flex items-center justify-center hover:bg-orange-500/30 transition-colors">
+                <span className="text-orange-400 text-sm font-bold">
+                  {user?.storeName?.[0]?.toUpperCase() || "S"}
+                </span>
+              </button>
+              {menuOpen && (
+                <div className="absolute right-0 top-11 w-52 bg-[#1a1a1a] border border-white/10 rounded-2xl shadow-xl z-50 overflow-hidden">
+                  <div className="px-4 py-3 border-b border-white/5">
+                    <p className="text-xs font-bold text-white truncate">{user?.storeName}</p>
+                    <p className="text-[10px] text-gray-500 truncate">{user?.email}</p>
+                  </div>
+                  {[
+                    { href: "/store/dashboard",     label: "Tableau de bord",  icon: LayoutDashboard },
+                    { href: "/store/orders",        label: "Commandes",        icon: ShoppingBag },
+                    { href: "/store/catalog",       label: "Catalogue",        icon: Package },
+                    { href: "/store/schedule",      label: "Horaires",         icon: Calendar },
+                    { href: "/store/settlements",   label: "Paiements",        icon: DollarSign },
+                    { href: "/store/notifications", label: "Notifications",    icon: Bell },
+                    { href: "/store/messages",      label: "Messages Admin",   icon: MessageCircle },
+                    { href: "/store/profile",       label: "Mon profil",       icon: User },
+                  ].map(item => (
+                    <Link key={item.href} href={item.href}
+                      onClick={() => setMenuOpen(false)}
+                      className={`flex items-center gap-3 px-4 py-2.5 hover:bg-white/5 transition-colors text-sm ${
+                        pathname === item.href ? "text-orange-400" : "text-gray-300"
+                      }`}>
+                      <item.icon className="h-4 w-4 shrink-0" />
+                      {item.label}
+                    </Link>
+                  ))}
+                  <div className="border-t border-white/5">
+                    <button onClick={async () => { await signOut(auth); router.push("/store-login"); }}
+                      className="w-full flex items-center gap-3 px-4 py-2.5 text-sm text-red-400 hover:bg-red-500/5 transition-colors">
+                      <LogOut className="h-4 w-4" />
+                      Déconnexion
+                    </button>
+                  </div>
+                </div>
+              )}
             </div>
           </div>
         </header>
