@@ -9,7 +9,9 @@ declare global { interface Window { google: any; initMap: () => void; } }
 const REGION_STYLE: Record<string, { fill: string; stroke: string; label: string }> = {
   laval:            { fill: "#f97316", stroke: "#ea6c00", label: "Laval" },
   montreal:         { fill: "#3b82f6", stroke: "#2563eb", label: "Montréal" },
+  north_shore:      { fill: "#10b981", stroke: "#059669", label: "Rive-Nord" },
   west_extended:    { fill: "#ec4899", stroke: "#db2777", label: "Ouest / West Island" },
+  south_shore_east: { fill: "#f59e0b", stroke: "#d97706", label: "Rive-Sud" },
   south_west:       { fill: "#ef4444", stroke: "#dc2626", label: "Sud-Ouest" },
 };
 
