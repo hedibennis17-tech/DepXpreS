@@ -17,7 +17,8 @@ import { COMMERCE_TYPES } from "@/lib/commerce-types";
 import {
   Store, ArrowLeft, RefreshCw, Star, ShoppingBag, TrendingUp,
   MapPin, Phone, Mail, Clock, Edit2, Save, X, CheckCircle2,
-  Package, Users, DollarSign, Calendar, AlertCircle
+  Package, Users, DollarSign, Calendar, AlertCircle,
+  Bell, MessageCircle, Send, Loader2
 } from "lucide-react";
 
 // ─── Types ───────────────────────────────────────────────────────────────────
