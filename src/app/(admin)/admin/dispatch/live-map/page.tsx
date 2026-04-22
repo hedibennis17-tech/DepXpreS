@@ -7,6 +7,7 @@ import { Loader2 } from "lucide-react";
 declare global { interface Window { google: any; initMap: () => void; } }
 
 const REGION_STYLE: Record<string, { fill: string; stroke: string; label: string }> = {
+  laval:            { fill: "#f97316", stroke: "#ea6c00", label: "Laval" },
   montreal:         { fill: "#3b82f6", stroke: "#2563eb", label: "Montréal" },
   west_extended:    { fill: "#ec4899", stroke: "#db2777", label: "Ouest / West Island" },
   south_west:       { fill: "#ef4444", stroke: "#dc2626", label: "Sud-Ouest" },
@@ -187,10 +188,6 @@ export default function LiveMapPage() {
           <div className="flex items-center gap-1"><div className="w-3 h-3 rounded-full bg-green-500"/><span className="text-xs text-gray-500">Disponible</span></div>
           <div className="flex items-center gap-1"><div className="w-3 h-3 rounded-full bg-blue-500"/><span className="text-xs text-gray-500">En livraison</span></div>
         </div>
-      </div>
-
-      <div className="bg-orange-50 border border-orange-200 rounded-2xl p-3 text-sm text-orange-700">
-        📂 Pour ajouter <b>Laval, Longueuil, Rive-Nord</b> — uploade leurs fichiers GeoJSON ici (renommés en .txt)
       </div>
 
       <div className="relative bg-white rounded-2xl border border-gray-100 overflow-hidden shadow-sm">
