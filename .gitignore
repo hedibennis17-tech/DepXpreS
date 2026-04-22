@@ -46,3 +46,4 @@ firestore-debug.logservice-account.json
 service-account.json
 scripts/serviceAccount.json
 *.json
+!public/montreal_zones.json
