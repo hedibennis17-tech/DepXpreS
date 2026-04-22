@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useEffect, useCallback } from "react";
+import { useState, useEffect, useCallback, useRef } from "react";
 import { useParams, useRouter } from "next/navigation";
 import { doc, getDoc, updateDoc, serverTimestamp } from "firebase/firestore";
 import { db } from "@/lib/firebase";
@@ -91,6 +91,17 @@ export default function StoreDetailPage() {
   const [error, setError] = useState("");
   const [editMode, setEditMode] = useState(false);
   const [saving, setSaving] = useState(false);
+  // Notification
+  const [notifSubject, setNotifSubject] = useState("");
+  const [notifMessage, setNotifMessage] = useState("");
+  const [notifSending, setNotifSending] = useState(false);
+  const [notifMsg, setNotifMsg] = useState<{type:"ok"|"err";text:string}|null>(null);
+  // Messages
+  const [chatMessages, setChatMessages] = useState<{id:string;text:string;senderRole:string;senderName:string;createdAt:string}[]>([]);
+  const [chatText, setChatText] = useState("");
+  const [chatSending, setChatSending] = useState(false);
+  const [chatLoading, setChatLoading] = useState(false);
+  const chatBottomRef = useRef<HTMLDivElement|null>(null);
   const [editData, setEditData] = useState<Partial<StoreData>>({});
   const commerceTypes = COMMERCE_TYPES;
 
@@ -190,6 +201,63 @@ export default function StoreDetailPage() {
   };
 
   // ─── Rendu ─────────────────────────────────────────────────────────────────
+
+  async function sendNotification() {
+    if (!notifMessage.trim()) return;
+    setNotifSending(true); setNotifMsg(null);
+    try {
+      const res = await fetch("/api/admin/notify-store", {
+        method:"POST", headers:{"Content-Type":"application/json"}, credentials:"include",
+        body: JSON.stringify({
+          storeId: params.storeId,
+          storeName: store?.name,
+          email: store?.email,
+          phone: store?.phone,
+          subject: notifSubject || "Notification FastDép",
+          message: notifMessage,
+        }),
+      });
+      const data = await res.json();
+      if (data.ok) {
+        setNotifMsg({type:"ok", text:`✅ Envoyé — SMS: ${data.results?.sms||"—"} | Email: ${data.results?.email||"—"}`});
+        setNotifSubject(""); setNotifMessage("");
+      } else throw new Error(data.error);
+    } catch(e){ setNotifMsg({type:"err",text:"Erreur envoi"}); }
+    finally { setNotifSending(false); }
+  }
+
+  async function loadMessages() {
+    if (!params.storeId) return;
+    setChatLoading(true);
+    try {
+      const res = await fetch(`/api/messages-store?storeId=${params.storeId}`, {credentials:"include"});
+      const data = await res.json();
+      if (data.messages) setChatMessages(data.messages);
+    } catch {}
+    finally { setChatLoading(false); }
+  }
+
+  async function sendChatMessage() {
+    if (!chatText.trim() || chatSending) return;
+    setChatSending(true);
+    try {
+      const res = await fetch("/api/messages-store", {
+        method:"POST", headers:{"Content-Type":"application/json"}, credentials:"include",
+        body: JSON.stringify({ storeId: params.storeId, text: chatText.trim(), senderName:"FastDép Admin" }),
+      });
+      const data = await res.json();
+      if (data.ok) {
+        setChatMessages(prev => [...prev, {
+          id: Date.now().toString(), text: chatText.trim(),
+          senderRole:"admin", senderName:"FastDép Admin",
+          createdAt: new Date().toISOString(),
+        }]);
+        setChatText("");
+        setTimeout(() => chatBottomRef.current?.scrollIntoView({behavior:"smooth"}), 100);
+      }
+    } catch {}
+    finally { setChatSending(false); }
+  }
 
   if (loading) {
     return (
@@ -302,11 +370,13 @@ export default function StoreDetailPage() {
 
       {/* Onglets */}
       <Tabs defaultValue="info" className="space-y-4">
-        <TabsList className="grid grid-cols-4 w-full max-w-lg">
-          <TabsTrigger value="info">Informations</TabsTrigger>
+        <TabsList className="grid grid-cols-6 w-full">
+          <TabsTrigger value="info">Infos</TabsTrigger>
           <TabsTrigger value="hours">Horaires</TabsTrigger>
           <TabsTrigger value="settings">Paramètres</TabsTrigger>
           <TabsTrigger value="orders">Commandes</TabsTrigger>
+          <TabsTrigger value="notification">🔔 Notifier</TabsTrigger>
+          <TabsTrigger value="messages" onClick={loadMessages}>💬 Messages</TabsTrigger>
         </TabsList>
 
         {/* ─── Onglet Informations ─────────────────────────────────────────── */}
@@ -597,6 +667,145 @@ export default function StoreDetailPage() {
             </CardContent>
           </Card>
         </TabsContent>
+
+        {/* ── NOTIFICATION ── */}
+        <TabsContent value="notification">
+          <div className="space-y-4 max-w-xl">
+            <div className="bg-white rounded-2xl border border-gray-100 shadow-sm p-5 space-y-4">
+              <div className="flex items-center gap-3">
+                <div className="w-10 h-10 bg-orange-100 rounded-xl flex items-center justify-center">
+                  <Bell className="h-5 w-5 text-orange-500" />
+                </div>
+                <div>
+                  <p className="text-sm font-bold text-gray-900">Envoyer une notification</p>
+                  <p className="text-xs text-gray-400">SMS + Email + Notification in-app</p>
+                </div>
+              </div>
+
+              {/* Destinataire */}
+              <div className="bg-gray-50 rounded-xl p-3 space-y-1.5">
+                <div className="flex justify-between text-sm">
+                  <span className="text-gray-400">Commerce</span>
+                  <span className="font-semibold text-gray-900">{store?.name}</span>
+                </div>
+                <div className="flex justify-between text-sm">
+                  <span className="text-gray-400">📧 Email</span>
+                  <span className="font-semibold text-gray-900">{store?.email || "—"}</span>
+                </div>
+                <div className="flex justify-between text-sm">
+                  <span className="text-gray-400">📱 SMS</span>
+                  <span className="font-semibold text-gray-900">{store?.phone || "Non renseigné"}</span>
+                </div>
+              </div>
+
+              {/* Messages rapides */}
+              <div>
+                <p className="text-xs text-gray-400 mb-2 font-semibold">Messages rapides</p>
+                <div className="flex flex-wrap gap-2">
+                  {[
+                    { label: "✅ Compte approuvé", msg: "Votre commerce FastDép a été approuvé ! Vous pouvez maintenant recevoir des commandes." },
+                    { label: "📦 Nouvelle commande", msg: "Vous avez une nouvelle commande en attente. Connectez-vous pour la préparer." },
+                    { label: "⚠️ Mise à jour requise", msg: "Veuillez mettre à jour vos informations de commerce dans l'application." },
+                    { label: "❌ Compte suspendu", msg: "Votre compte a été temporairement suspendu. Contactez notre support." },
+                  ].map(t => (
+                    <button key={t.label}
+                      onClick={() => { setNotifMessage(t.msg); setNotifSubject(t.label.replace(/[✅📦⚠️❌]/g,"").trim()); }}
+                      className="text-xs bg-orange-50 border border-orange-200 text-orange-700 font-semibold px-3 py-1.5 rounded-xl hover:bg-orange-100 transition-colors">
+                      {t.label}
+                    </button>
+                  ))}
+                </div>
+              </div>
+
+              <div>
+                <label className="text-xs text-gray-400 mb-1.5 block font-semibold">Sujet</label>
+                <input value={notifSubject} onChange={e => setNotifSubject(e.target.value)}
+                  placeholder="Ex: Mise à jour de votre compte"
+                  className="w-full border border-gray-200 rounded-xl px-4 py-2.5 text-sm outline-none focus:border-orange-400 transition-colors" />
+              </div>
+
+              <div>
+                <label className="text-xs text-gray-400 mb-1.5 block font-semibold">Message *</label>
+                <textarea value={notifMessage} onChange={e => setNotifMessage(e.target.value)}
+                  placeholder="Votre message au commerçant..."
+                  rows={4}
+                  className="w-full border border-gray-200 rounded-xl px-4 py-2.5 text-sm outline-none focus:border-orange-400 transition-colors resize-none" />
+              </div>
+
+              {notifMsg && (
+                <div className={`p-3 rounded-xl text-sm ${notifMsg.type==="ok" ? "bg-green-50 text-green-700 border border-green-200" : "bg-red-50 text-red-700 border border-red-200"}`}>
+                  {notifMsg.text}
+                </div>
+              )}
+
+              <button onClick={sendNotification} disabled={notifSending || !notifMessage.trim()}
+                className="w-full flex items-center justify-center gap-2 bg-orange-500 hover:bg-orange-600 text-white font-bold py-3.5 rounded-2xl text-sm transition-colors disabled:opacity-50">
+                {notifSending ? <><Loader2 className="h-4 w-4 animate-spin" />Envoi...</> : <><Send className="h-4 w-4" />Envoyer SMS + Email + Notification</>}
+              </button>
+            </div>
+          </div>
+        </TabsContent>
+
+        {/* ── MESSAGES ── */}
+        <TabsContent value="messages">
+          <div className="bg-white rounded-2xl border border-gray-100 shadow-sm overflow-hidden" style={{height:"520px",display:"flex",flexDirection:"column"}}>
+            <div className="flex items-center gap-3 px-5 py-4 border-b border-gray-100 shrink-0">
+              <div className="w-9 h-9 bg-orange-100 rounded-xl flex items-center justify-center">
+                <MessageCircle className="h-4 w-4 text-orange-500" />
+              </div>
+              <div>
+                <p className="text-sm font-bold text-gray-900">Messagerie — {store?.name}</p>
+                <p className="text-xs text-gray-400">Messages visibles par ce commerce uniquement</p>
+              </div>
+              <button onClick={() => {
+                setNotifMessage("✅ Votre commerce FastDép a été approuvé ! Bienvenue dans notre réseau.");
+              }} className="ml-auto text-xs bg-green-50 border border-green-200 text-green-700 font-semibold px-3 py-1.5 rounded-xl hover:bg-green-100 transition-colors">
+                📨 Message d&apos;approbation
+              </button>
+            </div>
+
+            <div className="flex-1 overflow-y-auto px-5 py-4 space-y-3 bg-gray-50">
+              {chatLoading ? (
+                <div className="flex items-center justify-center h-32">
+                  <Loader2 className="h-6 w-6 animate-spin text-orange-500" />
+                </div>
+              ) : chatMessages.length === 0 ? (
+                <div className="flex flex-col items-center justify-center h-40 text-center">
+                  <MessageCircle className="h-10 w-10 text-gray-200 mb-2" />
+                  <p className="text-gray-400 text-sm">Aucun message avec ce commerce</p>
+                </div>
+              ) : chatMessages.map(msg => {
+                const isAdmin = msg.senderRole === "admin";
+                return (
+                  <div key={msg.id} className={`flex ${isAdmin ? "justify-end" : "justify-start"}`}>
+                    <div className={`max-w-[70%] rounded-2xl px-4 py-2.5 ${isAdmin ? "bg-orange-500 text-white rounded-br-sm" : "bg-white border border-gray-100 text-gray-800 rounded-bl-sm shadow-sm"}`}>
+                      {!isAdmin && <p className="text-[10px] text-orange-500 font-bold mb-1">{msg.senderName}</p>}
+                      <p className="text-sm leading-relaxed">{msg.text}</p>
+                      <p className={`text-[10px] mt-1 ${isAdmin ? "text-orange-200" : "text-gray-400"}`}>
+                        {new Date(msg.createdAt).toLocaleTimeString("fr-CA",{hour:"2-digit",minute:"2-digit"})}
+                      </p>
+                    </div>
+                  </div>
+                );
+              })}
+              <div ref={chatBottomRef} />
+            </div>
+
+            <div className="px-4 py-3 border-t border-gray-100 shrink-0 bg-white">
+              <div className="flex items-center gap-3">
+                <input value={chatText} onChange={e => setChatText(e.target.value)}
+                  onKeyDown={e => e.key==="Enter" && !e.shiftKey && sendChatMessage()}
+                  placeholder="Écrire un message au commerçant..."
+                  className="flex-1 border border-gray-200 rounded-xl px-4 py-2.5 text-sm outline-none focus:border-orange-400 transition-colors" />
+                <button onClick={sendChatMessage} disabled={!chatText.trim()||chatSending}
+                  className="w-10 h-10 bg-orange-500 hover:bg-orange-600 rounded-xl flex items-center justify-center transition-colors disabled:opacity-40">
+                  {chatSending ? <Loader2 className="h-4 w-4 animate-spin text-white" /> : <Send className="h-4 w-4 text-white" />}
+                </button>
+              </div>
+            </div>
+          </div>
+        </TabsContent>
+
       </Tabs>
     </div>
   );
