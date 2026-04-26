@@ -1,5 +1,6 @@
 "use client";
 import { useState, useEffect } from "react";
+import { useRouter } from "next/navigation";
 import { auth, db } from "@/lib/firebase";
 import { onAuthStateChanged } from "firebase/auth";
 import { collection, query, where, onSnapshot, doc, updateDoc, serverTimestamp } from "firebase/firestore";
@@ -10,6 +11,7 @@ export default function DriverOrders() {
   const [orders, setOrders] = useState<any[]>([]);
   const [updating, setUpdating] = useState<string|null>(null);
   const [uid, setUid] = useState("");
+  const router = useRouter();
 
   useEffect(() => {
     const unsub = onAuthStateChanged(auth, u => {
@@ -39,6 +41,23 @@ export default function DriverOrders() {
     picked_up: "🚗 En route",
     en_route: "📦 Livraison confirmée",
   };
+
+  function navigate(o: any) {
+    const isPickup = o.status === "assigned";
+    const dest = isPickup ? (o.storeAddress || "") : (o.deliveryAddress || "");
+    const lat  = isPickup ? (o.storeLat  || 0) : (o.deliveryLat  || 0);
+    const lng  = isPickup ? (o.storeLng  || 0) : (o.deliveryLng  || 0);
+    const params = new URLSearchParams({
+      orderId: o.id,
+      phase: isPickup ? "pickup" : "dropoff",
+      dest,
+      lat: String(lat),
+      lng: String(lng),
+      client: o.clientName || "",
+      phone: o.clientPhone || "",
+    });
+    router.push(`/driver/navigation?${params.toString()}`);
+  }
 
   async function advance(orderId: string, currentStatus: string) {
     const next = NEXT_STATUS[currentStatus];
@@ -124,6 +143,13 @@ export default function DriverOrders() {
                   <Phone className="h-4 w-4" /> {o.clientPhone}
                 </a>
               )}
+
+              {/* Naviguer */}
+              <button onClick={() => navigate(o)}
+                className="w-full flex items-center justify-center gap-2 bg-blue-500/10 border border-blue-500/30 text-blue-400 font-bold py-3 rounded-2xl text-sm hover:bg-blue-500/20 transition-colors">
+                <Navigation className="h-4 w-4" />
+                {o.status === "assigned" ? "🏪 Naviguer vers le commerce" : "📦 Naviguer vers le client"}
+              </button>
 
               {/* Action */}
               {NEXT_STATUS[o.status] && (
