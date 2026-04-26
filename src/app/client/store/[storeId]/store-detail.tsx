@@ -272,12 +272,16 @@ export default function StoreDetail() {
               </span>
             </div>
             <div className="h-56">
+{/* OpenStreetMap — gratuit, sans clé API requise */}
               <iframe
-                src={`https://www.google.com/maps/embed/v1/place?key=${process.env.NEXT_PUBLIC_GOOGLE_MAPS_API_KEY || ""}&q=${encodeURIComponent((store.address || store.name) + ", Québec, Canada")}&zoom=15&language=fr`}
+                src={`https://www.openstreetmap.org/export/embed.html?bbox=${
+                  store.lng ? `${store.lng-0.01},${store.lat-0.008},${store.lng+0.01},${store.lat+0.008}` 
+                  : `-73.76,45.54,-73.74,45.56`
+                }&layer=mapnik&marker=${store.lat||45.55},${store.lng||-73.75}`}
                 width="100%" height="100%"
-                style={{ border: 0 }}
-                allowFullScreen loading="lazy"
-                referrerPolicy="no-referrer-when-downgrade"
+                style={{ border: 0, borderRadius: '8px' }}
+                loading="lazy"
+                title={`Localisation de ${store.name}`}
               />
             </div>
             <div className="p-4 space-y-2">
