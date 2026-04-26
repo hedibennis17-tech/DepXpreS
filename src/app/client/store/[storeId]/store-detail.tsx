@@ -45,41 +45,29 @@ function matchBlock(product: Product, keywords: string[]): boolean {
   return keywords.some(k => fields.includes(k.toLowerCase()));
 }
 
-// Composant carte utilisant Maps JavaScript API (même clé que le dashboard)
 declare global { interface Window { google: any; initStoreMap: () => void; } }
 function StoreMap({ address, lat, lng }: { address: string; lat?: number; lng?: number }) {
   const mapRef = React.useRef<HTMLDivElement>(null);
   React.useEffect(() => {
-    const initMap = () => {
-      if (!mapRef.current || !window.google) return;
-      const center = lat && lng ? { lat, lng } : { lat: 45.55, lng: -73.75 };
+    function initMap() {
+      if (!mapRef.current || !window.google?.maps) return;
+      const center = (lat && lng) ? { lat: Number(lat), lng: Number(lng) } : { lat: 45.55, lng: -73.75 };
       const map = new window.google.maps.Map(mapRef.current, {
-        center, zoom: 16,
-        disableDefaultUI: true,
-        zoomControl: true,
-        styles: [{ featureType: 'poi', stylers: [{ visibility: 'off' }] }],
+        center, zoom: 16, disableDefaultUI: true, zoomControl: true,
       });
-      new window.google.maps.Marker({
-        position: center, map,
-        icon: {
-          path: 'M12 2C8.13 2 5 5.13 5 9c0 5.25 7 13 7 13s7-7.75 7-13c0-3.87-3.13-7-7-7z',
-          fillColor: '#f97316', fillOpacity: 1,
-          strokeColor: '#fff', strokeWeight: 2,
-          scale: 1.8, anchor: new window.google.maps.Point(12, 22),
-        },
-      });
-    };
+      new window.google.maps.Marker({ position: center, map });
+    }
     if (window.google?.maps) { initMap(); return; }
     window.initStoreMap = initMap;
-    if (!document.querySelector('script[data-storemap]')) {
+    if (!document.querySelector('script[data-gmaps-store]')) {
       const s = document.createElement('script');
-      s.src = 'https://maps.googleapis.com/maps/api/js?key=AIzaSyAmDwm43D52jpgDp1MiNg_TvLBn_fDTsU8&callback=initStoreMap';
+      s.setAttribute('data-gmaps-store', '1');
+      s.src = 'https://maps.googleapis.com/maps/api/js?key=AIzaSyAmDwm43D52jpgDp1MiNg_TvLBn_fDTsU8&callback=initStoreMap&loading=async';
       s.async = true;
-      s.setAttribute('data-storemap', '1');
       document.head.appendChild(s);
     }
   }, [lat, lng]);
-  return <div ref={mapRef} style={{ width: '100%', height: '100%', borderRadius: '8px' }} />;
+  return <div ref={mapRef} style={{ width:'100%', height:'100%', borderRadius:'8px', minHeight:'220px' }} />;
 }
 
 
