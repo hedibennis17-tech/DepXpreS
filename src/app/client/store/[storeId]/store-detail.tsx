@@ -1,4 +1,5 @@
 "use client";
+import React from "react";
 import { useState, useEffect } from "react";
 import { useParams, useRouter } from "next/navigation";
 import { db } from "@/lib/firebase";
@@ -43,6 +44,44 @@ function matchBlock(product: Product, keywords: string[]): boolean {
   ].join(" ").toLowerCase();
   return keywords.some(k => fields.includes(k.toLowerCase()));
 }
+
+// Composant carte utilisant Maps JavaScript API (même clé que le dashboard)
+declare global { interface Window { google: any; initStoreMap: () => void; } }
+function StoreMap({ address, lat, lng }: { address: string; lat?: number; lng?: number }) {
+  const mapRef = React.useRef<HTMLDivElement>(null);
+  React.useEffect(() => {
+    const initMap = () => {
+      if (!mapRef.current || !window.google) return;
+      const center = lat && lng ? { lat, lng } : { lat: 45.55, lng: -73.75 };
+      const map = new window.google.maps.Map(mapRef.current, {
+        center, zoom: 16,
+        disableDefaultUI: true,
+        zoomControl: true,
+        styles: [{ featureType: 'poi', stylers: [{ visibility: 'off' }] }],
+      });
+      new window.google.maps.Marker({
+        position: center, map,
+        icon: {
+          path: 'M12 2C8.13 2 5 5.13 5 9c0 5.25 7 13 7 13s7-7.75 7-13c0-3.87-3.13-7-7-7z',
+          fillColor: '#f97316', fillOpacity: 1,
+          strokeColor: '#fff', strokeWeight: 2,
+          scale: 1.8, anchor: new window.google.maps.Point(12, 22),
+        },
+      });
+    };
+    if (window.google?.maps) { initMap(); return; }
+    window.initStoreMap = initMap;
+    if (!document.querySelector('script[data-storemap]')) {
+      const s = document.createElement('script');
+      s.src = 'https://maps.googleapis.com/maps/api/js?key=AIzaSyAmDwm43D52jpgDp1MiNg_TvLBn_fDTsU8&callback=initStoreMap';
+      s.async = true;
+      s.setAttribute('data-storemap', '1');
+      document.head.appendChild(s);
+    }
+  }, [lat, lng]);
+  return <div ref={mapRef} style={{ width: '100%', height: '100%', borderRadius: '8px' }} />;
+}
+
 
 export default function StoreDetail() {
   const params = useParams();
@@ -272,14 +311,7 @@ export default function StoreDetail() {
               </span>
             </div>
             <div className="h-56">
-<iframe
-                width="100%" height="100%"
-                style={{ border: 0, borderRadius: '8px' }}
-                loading="lazy"
-                allowFullScreen
-                referrerPolicy="no-referrer-when-downgrade"
-                src={`https://www.google.com/maps/embed/v1/place?key=AIzaSyAmDwm43D52jpgDp1MiNg_TvLBn_fDTsU8&q=${encodeURIComponent((store.address || store.name || '') + ', Québec, Canada')}&zoom=16&language=fr`}
-              />
+<StoreMap address={store.address || store.name || ''} lat={store.lat} lng={store.lng} />
             </div>
             <div className="p-4 space-y-2">
               {store.address && (
