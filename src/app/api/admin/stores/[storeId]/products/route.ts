@@ -5,55 +5,50 @@ import { adminDb } from '@/lib/firebase-admin';
 export async function GET(_: NextRequest, { params }: { params: Promise<{ storeId: string }> }) {
   try {
     const { storeId } = await params;
+    const ids = new Set<string>([storeId]);
 
-    // Collecte tous les IDs possibles pour ce store
-    const possibleIds = new Set<string>([storeId]);
-
-    // Chercher le document store pour trouver ownerId/userId
+    // 1. Récupérer le doc store pour trouver tous les IDs liés
     const storeDoc = await adminDb.collection('stores').doc(storeId).get();
     if (storeDoc.exists) {
-      const data = storeDoc.data()!;
-      if (data.ownerId)  possibleIds.add(data.ownerId);
-      if (data.userId)   possibleIds.add(data.userId);
-      if (data.uid)      possibleIds.add(data.uid);
-      if (data.id)       possibleIds.add(data.id);
+      const d = storeDoc.data()!;
+      [d.ownerId, d.userId, d.uid, d.id].forEach(v => v && ids.add(v));
     }
 
-    // Chercher aussi dans app_users si un user a storeId = ce storeId
-    const usersSnap = await adminDb.collection('app_users')
-      .where('storeId', '==', storeId).limit(1).get();
-    if (!usersSnap.empty) {
-      const userData = usersSnap.docs[0].data();
-      possibleIds.add(usersSnap.docs[0].id);
-      if (userData.uid) possibleIds.add(userData.uid);
-    }
+    // 2. Chercher dans app_users
+    const [byStoreId, byUid] = await Promise.all([
+      adminDb.collection('app_users').where('storeId', '==', storeId).limit(3).get(),
+      adminDb.collection('app_users').where('uid', '==', storeId).limit(1).get(),
+    ]);
+    [...byStoreId.docs, ...byUid.docs].forEach(d => {
+      ids.add(d.id);
+      const data = d.data();
+      [data.uid, data.storeId].forEach(v => v && ids.add(v));
+    });
 
-    // Chercher les produits avec tous les IDs possibles
-    let allProducts: any[] = [];
-    for (const id of possibleIds) {
+    // 3. Chercher produits avec tous les IDs
+    let products: any[] = [];
+    for (const id of ids) {
       const snap = await adminDb.collection('products')
-        .where('storeId', '==', id)
-        .orderBy('name', 'asc').get();
+        .where('storeId', '==', id).get();
       if (!snap.empty) {
-        allProducts = snap.docs.map(d => {
+        products = snap.docs.map(d => {
           const data = d.data();
           return {
             id: d.id,
             name: data.name || '',
-            price: typeof data.price === 'number' ? data.price : parseFloat(data.price) || 0,
+            price: Number(data.price) || 0,
             categoryName: data.categoryName || data.category || 'Général',
             categoryId: data.categoryId || '',
             description: data.description || '',
             imageUrl: data.imageUrl || data.image || '',
-            inStock: data.inStock !== false && data.is_available !== false,
-            storeId: data.storeId,
+            inStock: data.inStock !== false,
           };
-        });
-        break; // On a trouvé des produits — stop
+        }).sort((a,b) => a.name.localeCompare(b.name));
+        break;
       }
     }
 
-    return NextResponse.json({ products: allProducts, total: allProducts.length });
+    return NextResponse.json({ products, total: products.length, debug_ids: [...ids] });
   } catch (e) {
     return NextResponse.json({ error: String(e), products: [] }, { status: 500 });
   }

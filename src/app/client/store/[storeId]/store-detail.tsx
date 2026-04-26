@@ -272,22 +272,14 @@ export default function StoreDetail() {
               </span>
             </div>
             <div className="h-56">
-{store.lat && store.lng ? (
-                <iframe
-                  src={`https://maps.googleapis.com/maps/api/staticmap?center=${store.lat},${store.lng}&zoom=16&size=600x300&scale=2&markers=color:orange%7C${store.lat},${store.lng}&key=AIzaSyAmDwm43D52jpgDp1MiNg_TvLBn_fDTsU8`}
-                  width="100%" height="100%"
-                  style={{ border: 0, borderRadius: '8px', pointerEvents: 'none' }}
-                  title={`Localisation de ${store.name}`}
-                />
-              ) : (
-                <iframe
-                  src={`https://www.openstreetmap.org/export/embed.html?bbox=-73.77,45.53,-73.73,45.57&layer=mapnik`}
-                  width="100%" height="100%"
-                  style={{ border: 0, borderRadius: '8px' }}
-                  loading="lazy"
-                  title={`Localisation de ${store.name}`}
-                />
-              )}
+<iframe
+                width="100%" height="100%"
+                style={{ border: 0, borderRadius: '8px' }}
+                loading="lazy"
+                allowFullScreen
+                referrerPolicy="no-referrer-when-downgrade"
+                src={`https://www.google.com/maps/embed/v1/place?key=AIzaSyAmDwm43D52jpgDp1MiNg_TvLBn_fDTsU8&q=${encodeURIComponent((store.address || store.name || '') + ', Québec, Canada')}&zoom=16&language=fr`}
+              />
             </div>
             <div className="p-4 space-y-2">
               {store.address && (
