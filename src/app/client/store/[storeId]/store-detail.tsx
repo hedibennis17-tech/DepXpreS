@@ -272,17 +272,22 @@ export default function StoreDetail() {
               </span>
             </div>
             <div className="h-56">
-{/* OpenStreetMap — gratuit, sans clé API requise */}
-              <iframe
-                src={`https://www.openstreetmap.org/export/embed.html?bbox=${
-                  store.lng ? `${store.lng-0.01},${store.lat-0.008},${store.lng+0.01},${store.lat+0.008}` 
-                  : `-73.76,45.54,-73.74,45.56`
-                }&layer=mapnik&marker=${store.lat||45.55},${store.lng||-73.75}`}
-                width="100%" height="100%"
-                style={{ border: 0, borderRadius: '8px' }}
-                loading="lazy"
-                title={`Localisation de ${store.name}`}
-              />
+{store.lat && store.lng ? (
+                <iframe
+                  src={`https://maps.googleapis.com/maps/api/staticmap?center=${store.lat},${store.lng}&zoom=16&size=600x300&scale=2&markers=color:orange%7C${store.lat},${store.lng}&key=AIzaSyAmDwm43D52jpgDp1MiNg_TvLBn_fDTsU8`}
+                  width="100%" height="100%"
+                  style={{ border: 0, borderRadius: '8px', pointerEvents: 'none' }}
+                  title={`Localisation de ${store.name}`}
+                />
+              ) : (
+                <iframe
+                  src={`https://www.openstreetmap.org/export/embed.html?bbox=-73.77,45.53,-73.73,45.57&layer=mapnik`}
+                  width="100%" height="100%"
+                  style={{ border: 0, borderRadius: '8px' }}
+                  loading="lazy"
+                  title={`Localisation de ${store.name}`}
+                />
+              )}
             </div>
             <div className="p-4 space-y-2">
               {store.address && (
