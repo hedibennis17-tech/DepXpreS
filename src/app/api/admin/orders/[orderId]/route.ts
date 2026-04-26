@@ -81,3 +81,38 @@ export async function GET(
     return NextResponse.json({ error: "Failed to fetch order" }, { status: 500 });
   }
 }
+
+export async function PATCH(req: NextRequest, { params }: { params: { orderId: string } }) {
+  try {
+    const { orderId } = params;
+    const body = await req.json();
+    const { driverId, driverName, status, ...rest } = body;
+
+    const updateData: Record<string, any> = {
+      updatedAt: new Date(),
+      ...rest,
+    };
+    if (driverId)    updateData.driverId   = driverId;
+    if (driverName)  updateData.driverName = driverName;
+    if (status)      updateData.status     = status;
+    if (status === "assigned") updateData.assignedAt = new Date();
+
+    await adminDb.collection("orders").doc(orderId).update(updateData);
+
+    // Notif chauffeur
+    if (driverId && status === "assigned") {
+      const { FieldValue } = await import("firebase-admin/firestore");
+      await adminDb.collection("notifications").add({
+        userId: driverId, userType: "driver", type: "new_order",
+        title: "🚗 Nouvelle commande assignée",
+        body: `Une commande vous a été assignée. Ouvrez l'app pour accepter.`,
+        orderId, read: false,
+        createdAt: FieldValue.serverTimestamp(),
+      });
+    }
+
+    return NextResponse.json({ ok: true });
+  } catch (e) {
+    return NextResponse.json({ error: String(e) }, { status: 500 });
+  }
+}
