@@ -63,45 +63,107 @@ export async function GET(req: NextRequest) {
       }
     }
 
-    // ===== STRATÉGIE 2: Google Maps Geocoding API =====
+    // ===== STRATÉGIE 2: Google Places Autocomplete (meilleur pour adresses partielles) =====
     try {
-      const region = "ca";
-      const components = `country:CA|administrative_area:QC`;
-      const biasLocation = grandMontrealOnly ? "&location=45.5017,-73.5673&radius=50000" : "";
-      const geocodeUrl = `https://maps.googleapis.com/maps/api/geocode/json?address=${encodeURIComponent(q + ", Québec, Canada")}&components=${encodeURIComponent(components)}&region=${region}${biasLocation}&key=${GOOGLE_MAPS_KEY}&language=fr`;
+      // Places Autocomplete avec bias sur Grand Montréal (Laval, MTL, Longueuil, etc.)
+      const locationBias = "circle:80000@45.5017,-73.5673"; // 80km autour de Montréal
+      const placesUrl = `https://maps.googleapis.com/maps/api/place/autocomplete/json?input=${encodeURIComponent(q)}&components=country:CA&language=fr&types=address&location=45.5017,-73.5673&radius=80000&strictbounds=false&key=${GOOGLE_MAPS_KEY}`;
+
+      const placesResp = await fetch(placesUrl, { signal: AbortSignal.timeout(4000) });
+      const placesData = await placesResp.json();
+
+      if (placesData.status === "OK" && placesData.predictions?.length > 0) {
+        // Filtrer QC seulement
+        const qcPredictions = placesData.predictions.filter((p: any) =>
+          p.description?.includes("QC") || p.description?.includes("Québec") ||
+          p.description?.includes("Quebec") || p.description?.includes("Laval") ||
+          p.description?.includes("Montréal") || p.description?.includes("Longueuil")
+        ).slice(0, limit);
+
+        // Pour chaque prédiction, fetch les détails pour avoir lat/lng
+        const items = await Promise.all(
+          qcPredictions.map(async (pred: any) => {
+            try {
+              const detailUrl = `https://maps.googleapis.com/maps/api/place/details/json?place_id=${pred.place_id}&fields=geometry,address_components,formatted_address&language=fr&key=${GOOGLE_MAPS_KEY}`;
+              const detailResp = await fetch(detailUrl, { signal: AbortSignal.timeout(3000) });
+              const detailData = await detailResp.json();
+
+              if (detailData.status !== "OK") return null;
+
+              const result = detailData.result;
+              const comps = result.address_components || [];
+              const getComp = (type: string) =>
+                comps.find((c: any) => c.types.includes(type))?.long_name || "";
+              const getCompShort = (type: string) =>
+                comps.find((c: any) => c.types.includes(type))?.short_name || "";
+
+              const streetNumber = getComp("street_number");
+              const route = getComp("route");
+              const city = getComp("locality") || getComp("sublocality_level_1") || getComp("administrative_area_level_3");
+              const postalCode = getComp("postal_code");
+              const provinceShort = getCompShort("administrative_area_level_1");
+
+              // Filtrer seulement QC
+              if (provinceShort && provinceShort !== "QC") return null;
+
+              const line1 = [streetNumber, route].filter(Boolean).join(" ") || route;
+
+              return {
+                addressId: pred.place_id,
+                label: line1 || pred.description,
+                fullLabel: result.formatted_address || pred.description,
+                line1,
+                city,
+                provinceCode: "QC",
+                postalCode,
+                latitude: result.geometry?.location?.lat || 0,
+                longitude: result.geometry?.location?.lng || 0,
+                supplier: "Google Places",
+                isGrandMontreal: true,
+                matchScore: 0.95,
+              };
+            } catch { return null; }
+          })
+        );
+
+        const validItems = items.filter(Boolean);
+        if (validItems.length > 0) {
+          return NextResponse.json(
+            { items: validItems, total: validItems.length, source: "google_places" },
+            { headers: { "Cache-Control": "public, s-maxage=60" } }
+          );
+        }
+      }
+    } catch {
+      // Places Autocomplete échoué, continuer avec fallback Geocoding
+    }
+
+    // ===== STRATÉGIE 2b: Google Maps Geocoding fallback =====
+    try {
+      const geocodeUrl = `https://maps.googleapis.com/maps/api/geocode/json?address=${encodeURIComponent(q + ", Québec, Canada")}&components=${encodeURIComponent("country:CA|administrative_area:QC")}&region=ca&location=45.5017,-73.5673&radius=80000&key=${GOOGLE_MAPS_KEY}&language=fr`;
 
       const geoResp = await fetch(geocodeUrl, { signal: AbortSignal.timeout(3000) });
       const geoData = await geoResp.json();
 
       if (geoData.status === "OK" && geoData.results?.length > 0) {
-        const items = geoData.results.slice(0, limit).map((result: {
-          formatted_address: string;
-          address_components: Array<{ long_name: string; short_name: string; types: string[] }>;
-          geometry: { location: { lat: number; lng: number } };
-          place_id: string;
-        }) => {
+        const items = geoData.results.slice(0, limit).map((result: any) => {
           const comps = result.address_components || [];
           const getComp = (type: string) =>
-            comps.find((c) => c.types.includes(type))?.long_name || "";
+            comps.find((c: any) => c.types.includes(type))?.long_name || "";
           const getCompShort = (type: string) =>
-            comps.find((c) => c.types.includes(type))?.short_name || "";
+            comps.find((c: any) => c.types.includes(type))?.short_name || "";
 
           const streetNumber = getComp("street_number");
           const route = getComp("route");
-          const city =
-            getComp("locality") ||
-            getComp("sublocality") ||
-            getComp("administrative_area_level_3");
+          const city = getComp("locality") || getComp("sublocality") || getComp("administrative_area_level_3");
           const postalCode = getComp("postal_code");
           const provinceShort = getCompShort("administrative_area_level_1");
-
           const line1 = [streetNumber, route].filter(Boolean).join(" ") || route;
-          const fullLabel = result.formatted_address;
 
           return {
             addressId: result.place_id,
-            label: line1 || fullLabel,
-            fullLabel,
+            label: line1 || result.formatted_address,
+            fullLabel: result.formatted_address,
             line1,
             city,
             provinceCode: provinceShort || "QC",
@@ -112,15 +174,17 @@ export async function GET(req: NextRequest) {
             isGrandMontreal: true,
             matchScore: 0.85,
           };
-        });
+        }).filter((item: any) => item.provinceCode === "QC");
 
-        return NextResponse.json(
-          { items, total: items.length, source: "google" },
-          { headers: { "Cache-Control": "public, s-maxage=300, stale-while-revalidate=3600" } }
-        );
+        if (items.length > 0) {
+          return NextResponse.json(
+            { items, total: items.length, source: "google" },
+            { headers: { "Cache-Control": "public, s-maxage=300" } }
+          );
+        }
       }
     } catch {
-      // Google Maps échoué, continuer avec Firestore fallback
+      // Geocoding échoué, continuer avec Firestore fallback
     }
 
     // ===== STRATÉGIE 3: Firestore fallback (search_text pour tout) =====
