@@ -84,10 +84,10 @@ export async function POST(req: NextRequest) {
   try {
     const body = await req.json();
     const {
-      clientId, clientName, clientPhone, clientEmail,
+      clientId, clientName, clientPhone,
       storeId, storeName, storeAddress, storePhone,
       items, deliveryAddress, deliveryLat, deliveryLng,
-      deliveryType, deliveryInstructions, note,
+      deliveryType, deliveryInstructions,
       subtotal, deliveryFee, taxes, total,
       driverId, driverName,
     } = body;
@@ -97,198 +97,149 @@ export async function POST(req: NextRequest) {
     }
 
     const { FieldValue } = await import("firebase-admin/firestore");
-
-    // Générer numéro de commande
     const orderNumber = `FD-${Date.now().toString().slice(-6)}`;
 
+    // ── 1. Créer la commande ──────────────────────────────────────────────
     const orderData: Record<string, any> = {
       orderNumber,
-      clientId, clientName: clientName || "", clientPhone: clientPhone || "", clientEmail: clientEmail || "",
-      storeId, storeName: storeName || "", storeAddress: storeAddress || "", storePhone: storePhone || "",
-      items: items || [],
-      deliveryAddress, deliveryLat: deliveryLat || null, deliveryLng: deliveryLng || null,
-      deliveryType: deliveryType || "door",
-      deliveryInstructions: deliveryInstructions || note || "",
-      subtotal: subtotal || 0,
-      deliveryFee: deliveryFee || 4.99,
-      taxes: taxes || 0,
-      total: total || 0,
+      clientId, clientName: clientName||"", clientPhone: clientPhone||"",
+      storeId, storeName: storeName||"", storeAddress: storeAddress||"", storePhone: storePhone||"",
+      items: items||[],
+      deliveryAddress, deliveryLat: deliveryLat||null, deliveryLng: deliveryLng||null,
+      deliveryType: deliveryType||"door",
+      deliveryInstructions: deliveryInstructions||"",
+      subtotal: subtotal||0, deliveryFee: deliveryFee||4.99,
+      taxes: taxes||0, total: total||0,
       status: driverId ? "assigned" : "pending",
       paymentStatus: "pending",
       source: "admin_manual",
       createdAt: FieldValue.serverTimestamp(),
       updatedAt: FieldValue.serverTimestamp(),
     };
-
     if (driverId) {
       orderData.driverId = driverId;
-      orderData.driverName = driverName || "";
+      orderData.driverName = driverName||"";
       orderData.assignedAt = FieldValue.serverTimestamp();
     }
-
-    // Créer la commande
     const orderRef = await adminDb.collection("orders").add(orderData);
     const orderId = orderRef.id;
 
-    // ── NOTIFICATIONS ──────────────────────────────────────────────────────
-
-    const notifPromises: Promise<any>[] = [];
-
-    // 1. Notification in-app + email au STORE
-    notifPromises.push(
+    // ── 2. Notifications in-app (Firestore — toujours fiable) ─────────────
+    await Promise.all([
+      // Store
       adminDb.collection("notifications").add({
         userId: storeId, userType: "store", type: "new_order",
-        title: "🛍️ Nouvelle commande reçue",
-        body: `Commande #${orderNumber} — ${items.length} article(s) — ${(total||0).toFixed(2)} $`,
+        title: "🛍️ Nouvelle commande #" + orderNumber,
+        body: `${items.length} article(s) — Livraison: ${deliveryAddress} — Total: ${(total||0).toFixed(2)}$`,
         orderId, read: false, createdAt: FieldValue.serverTimestamp(),
-      })
-    );
-
-    // 2. Email au store via SendGrid
-    if (process.env.SENDGRID_API_KEY && storePhone) {
-      const storeDoc = await adminDb.collection("stores").doc(storeId).get();
-      const storeEmail = storeDoc.data()?.email || storeDoc.data()?.ownerEmail;
-      if (storeEmail) {
-        notifPromises.push(
-          fetch("https://api.sendgrid.com/v3/mail/send", {
-            method: "POST",
-            headers: { "Authorization": `Bearer ${process.env.SENDGRID_API_KEY}`, "Content-Type": "application/json" },
-            body: JSON.stringify({
-              personalizations: [{ to: [{ email: storeEmail, name: storeName }] }],
-              from: { email: process.env.FROM_EMAIL || "noreply@fastdep.ca", name: "FastDép" },
-              subject: `🛍️ Nouvelle commande #${orderNumber}`,
-              content: [{
-                type: "text/html",
-                value: `<div style="font-family:sans-serif;max-width:500px;margin:0 auto">
-                  <div style="background:#f97316;padding:16px 24px;border-radius:12px 12px 0 0">
-                    <h2 style="color:white;margin:0">⚡ FastDép — Nouvelle commande</h2>
-                  </div>
-                  <div style="background:#fff;border:1px solid #e5e7eb;border-top:none;padding:24px;border-radius:0 0 12px 12px">
-                    <p><b>Commande #${orderNumber}</b></p>
-                    <p>Articles : ${items.map((i: any) => `${i.name} ×${i.qty}`).join(", ")}</p>
-                    <p>Livraison à : <b>${deliveryAddress}</b></p>
-                    <p>Total : <b>${(total||0).toFixed(2)} $</b></p>
-                    <p style="color:#6b7280;font-size:12px">Préparez la commande dès que possible.</p>
-                  </div>
-                </div>`
-              }],
-            }),
-          }).catch(() => {})
-        );
-      }
-    }
-
-    // 3. SMS au store via Twilio
-    if (process.env.TWILIO_SID && storePhone) {
-      const cleaned = storePhone.replace(/[\s\-\(\)]/g, "");
-      const formatted = cleaned.startsWith("+") ? cleaned : `+1${cleaned}`;
-      notifPromises.push(
-        fetch(`https://api.twilio.com/2010-04-01/Accounts/${process.env.TWILIO_SID}/Messages.json`, {
-          method: "POST",
-          headers: {
-            "Authorization": "Basic " + Buffer.from(`${process.env.TWILIO_SID}:${process.env.TWILIO_TOKEN}`).toString("base64"),
-            "Content-Type": "application/x-www-form-urlencoded",
-          },
-          body: new URLSearchParams({
-            From: process.env.TWILIO_FROM || "",
-            To: formatted,
-            Body: `FastDép — Nouvelle commande #${orderNumber} | ${items.length} article(s) | Livraison: ${deliveryAddress} | Total: ${(total||0).toFixed(2)}$`,
-          }),
-        }).catch(() => {})
-      );
-    }
-
-    // 4. Notification in-app au CHAUFFEUR si assigné
-    if (driverId) {
-      notifPromises.push(
-        adminDb.collection("notifications").add({
-          userId: driverId, userType: "driver", type: "new_order",
-          title: "🚗 Nouvelle commande assignée",
-          body: `Commande #${orderNumber} — Récupérer chez ${storeName} — Livrer à ${deliveryAddress}`,
-          orderId, read: false, createdAt: FieldValue.serverTimestamp(),
-        })
-      );
-
-      // SMS au chauffeur
-      if (process.env.TWILIO_SID) {
-        const driverDoc = await adminDb.collection("driver_profiles").doc(driverId).get();
-        const driverPhone = driverDoc.data()?.phone;
-        if (driverPhone) {
-          const cleaned = driverPhone.replace(/[\s\-\(\)]/g, "");
-          const formatted = cleaned.startsWith("+") ? cleaned : `+1${cleaned}`;
-          notifPromises.push(
-            fetch(`https://api.twilio.com/2010-04-01/Accounts/${process.env.TWILIO_SID}/Messages.json`, {
-              method: "POST",
-              headers: {
-                "Authorization": "Basic " + Buffer.from(`${process.env.TWILIO_SID}:${process.env.TWILIO_TOKEN}`).toString("base64"),
-                "Content-Type": "application/x-www-form-urlencoded",
-              },
-              body: new URLSearchParams({
-                From: process.env.TWILIO_FROM || "",
-                To: formatted,
-                Body: `FastDép — Commande #${orderNumber} assignée! Récupérer chez ${storeName} (${storeAddress}) et livrer à ${deliveryAddress}.`,
-              }),
-            }).catch(() => {})
-          );
-        }
-      }
-    }
-
-    // 5. Notification in-app au CLIENT
-    notifPromises.push(
+      }),
+      // Client
       adminDb.collection("notifications").add({
         userId: clientId, userType: "client", type: "order_confirmed",
-        title: "✅ Commande confirmée",
-        body: `Votre commande #${orderNumber} a été confirmée. Livraison en cours de préparation.`,
+        title: "✅ Commande #" + orderNumber + " confirmée",
+        body: `Votre commande chez ${storeName} est en cours de préparation.`,
         orderId, read: false, createdAt: FieldValue.serverTimestamp(),
-      })
-    );
+      }),
+      // Chauffeur si assigné
+      ...(driverId ? [adminDb.collection("notifications").add({
+        userId: driverId, userType: "driver", type: "new_order",
+        title: "🚗 Commande #" + orderNumber + " assignée",
+        body: `Récupérer chez ${storeName} → Livrer à ${deliveryAddress}`,
+        orderId, read: false, createdAt: FieldValue.serverTimestamp(),
+      })] : []),
+    ]);
 
-    // 6. Email au client
-    if (process.env.SENDGRID_API_KEY && clientPhone) {
-      const clientDoc = await adminDb.collection("app_users").doc(clientId).get();
-      const clientEmail2 = clientDoc.data()?.email || clientEmail;
-      if (clientEmail2) {
-        notifPromises.push(
-          fetch("https://api.sendgrid.com/v3/mail/send", {
-            method: "POST",
-            headers: { "Authorization": `Bearer ${process.env.SENDGRID_API_KEY}`, "Content-Type": "application/json" },
-            body: JSON.stringify({
-              personalizations: [{ to: [{ email: clientEmail2, name: clientName }] }],
-              from: { email: process.env.FROM_EMAIL || "noreply@fastdep.ca", name: "FastDép" },
-              subject: `✅ Commande #${orderNumber} confirmée`,
-              content: [{
-                type: "text/html",
-                value: `<div style="font-family:sans-serif;max-width:500px;margin:0 auto">
-                  <div style="background:#f97316;padding:16px 24px;border-radius:12px 12px 0 0">
-                    <h2 style="color:white;margin:0">⚡ FastDép</h2>
-                  </div>
-                  <div style="background:#fff;border:1px solid #e5e7eb;border-top:none;padding:24px;border-radius:0 0 12px 12px">
-                    <p>Bonjour <b>${clientName}</b>,</p>
-                    <p>Votre commande <b>#${orderNumber}</b> est confirmée !</p>
-                    <p>Articles : ${items.map((i: any) => `${i.name} ×${i.qty}`).join(", ")}</p>
-                    <p>Livraison à : <b>${deliveryAddress}</b></p>
-                    <p>Total : <b>${(total||0).toFixed(2)} $</b></p>
-                    <p style="color:#6b7280;font-size:12px">Merci de choisir FastDép !</p>
-                  </div>
-                </div>`
-              }],
-            }),
-          }).catch(() => {})
+    // ── 3. SMS Twilio ─────────────────────────────────────────────────────
+    const SID   = process.env.TWILIO_SID;
+    const TOKEN = process.env.TWILIO_TOKEN || process.env.TWILIO_AUTH_TOKEN;
+    const FROM  = process.env.TWILIO_FROM;
+
+    async function sendSMS(to: string, msg: string) {
+      if (!SID || !TOKEN || !FROM || !to) return;
+      const phone = to.replace(/[\s\-\(\)]/g,"");
+      const formatted = phone.startsWith("+") ? phone : `+1${phone}`;
+      await fetch(`https://api.twilio.com/2010-04-01/Accounts/${SID}/Messages.json`, {
+        method:"POST",
+        headers:{
+          "Authorization":"Basic "+Buffer.from(`${SID}:${TOKEN}`).toString("base64"),
+          "Content-Type":"application/x-www-form-urlencoded",
+        },
+        body: new URLSearchParams({ From:FROM, To:formatted, Body:msg }),
+      });
+    }
+
+    // SMS store
+    if (storePhone) {
+      await sendSMS(storePhone,
+        `FastDép 🛍️ Nouvelle commande #${orderNumber} | ${items.map((i:any)=>`${i.qty}x ${i.name}`).join(", ")} | Livraison: ${deliveryAddress} | ${(total||0).toFixed(2)}$`
+      );
+    }
+
+    // SMS chauffeur
+    if (driverId) {
+      const driverDoc = await adminDb.collection("driver_profiles").doc(driverId).get();
+      const driverPhone = driverDoc.data()?.phone || driverDoc.data()?.phoneNumber;
+      if (driverPhone) {
+        await sendSMS(driverPhone,
+          `FastDép 🚗 Commande #${orderNumber} assignée! Récupérer: ${storeName} (${storeAddress}) → Livrer: ${deliveryAddress}`
         );
       }
     }
 
-    // Lancer toutes les notifications en parallèle (sans bloquer)
-    Promise.allSettled(notifPromises);
+    // SMS client
+    if (clientPhone) {
+      await sendSMS(clientPhone,
+        `FastDép ✅ Commande #${orderNumber} confirmée! Livraison chez ${storeName} en cours de préparation. Merci!`
+      );
+    }
 
-    return NextResponse.json({
-      ok: true,
-      order: { id: orderId, orderNumber, status: orderData.status },
-    });
+    // ── 4. Email SendGrid ─────────────────────────────────────────────────
+    const SGKEY  = process.env.SENDGRID_API_KEY;
+    const FROMEMAIL = process.env.FROM_EMAIL || "noreply@fastdep.ca";
 
-  } catch (error) {
-    console.error("POST /api/admin/orders error:", error);
+    async function sendEmail(to: string, name: string, subject: string, html: string) {
+      if (!SGKEY || !to) return;
+      await fetch("https://api.sendgrid.com/v3/mail/send", {
+        method:"POST",
+        headers:{"Authorization":`Bearer ${SGKEY}`,"Content-Type":"application/json"},
+        body: JSON.stringify({
+          personalizations:[{to:[{email:to, name}]}],
+          from:{email:FROMEMAIL, name:"FastDép"},
+          subject, content:[{type:"text/html", value:html}],
+        }),
+      });
+    }
+
+    const emailStyle = `font-family:sans-serif;max-width:520px;margin:0 auto`;
+    const header = `<div style="background:#f97316;padding:16px 24px;border-radius:12px 12px 0 0"><h2 style="color:#fff;margin:0">⚡ FastDép</h2></div>`;
+    const footer = `<p style="color:#9ca3af;font-size:12px;margin-top:20px">Équipe FastDép — Ne pas répondre à cet email.</p>`;
+    const wrap = (inner:string) => `<div style="${emailStyle}">${header}<div style="background:#fff;border:1px solid #e5e7eb;border-top:none;padding:24px;border-radius:0 0 12px 12px">${inner}${footer}</div></div>`;
+    const itemsList = items.map((i:any)=>`<li>${i.qty}× ${i.name} — ${(i.price*i.qty).toFixed(2)}$</li>`).join("");
+
+    // Email store
+    const storeDoc = await adminDb.collection("stores").doc(storeId).get();
+    const storeEmail = storeDoc.data()?.email || storeDoc.data()?.ownerEmail;
+    if (storeEmail) {
+      await sendEmail(storeEmail, storeName,
+        `🛍️ Nouvelle commande #${orderNumber}`,
+        wrap(`<p>Nouvelle commande à préparer :</p><ul>${itemsList}</ul><p>📍 Livraison: <b>${deliveryAddress}</b></p><p>💰 Total: <b>${(total||0).toFixed(2)}$</b></p>`)
+      );
+    }
+
+    // Email client
+    const clientDoc = await adminDb.collection("app_users").doc(clientId).get();
+    const clientEmail = clientDoc.data()?.email;
+    if (clientEmail) {
+      await sendEmail(clientEmail, clientName,
+        `✅ Commande #${orderNumber} confirmée`,
+        wrap(`<p>Bonjour <b>${clientName}</b>,</p><p>Votre commande est confirmée !</p><ul>${itemsList}</ul><p>📍 Livraison: <b>${deliveryAddress}</b></p><p>💰 Total: <b>${(total||0).toFixed(2)}$</b></p>`)
+      );
+    }
+
+    return NextResponse.json({ ok:true, order:{ id:orderId, orderNumber, status:orderData.status } });
+
+  } catch(error) {
+    console.error("POST /api/admin/orders:", error);
     return NextResponse.json({ error: String(error) }, { status: 500 });
   }
 }
