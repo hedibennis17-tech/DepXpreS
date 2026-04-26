@@ -109,7 +109,7 @@ export function AddressAutocompleteInput({
 
       setIsLoading(true);
       try {
-        const params = new URLSearchParams({ q, province, limit: "8" });
+        const params = new URLSearchParams({ q, province, limit: "8", grand_montreal: "true" });
         if (city) params.set("city", city);
 
         const res = await fetch(`/api/address/search?${params.toString()}`);

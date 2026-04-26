@@ -333,6 +333,7 @@ export default function NewOrderPage() {
               province="QC"
               showCurrentLocationButton
               required
+              city=""
             />
             {/* Type livraison */}
             <div>
@@ -382,7 +383,15 @@ export default function NewOrderPage() {
                 {loadingProducts ? (
                   <div className="flex justify-center py-8"><Loader2 className="h-5 w-5 animate-spin text-orange-500"/></div>
                 ) : filteredProducts.length===0 ? (
-                  <p className="text-center text-muted-foreground text-sm py-6">Aucun produit trouvé</p>
+                  <div className="text-center py-6 space-y-2">
+                    <Package className="h-8 w-8 mx-auto text-muted-foreground opacity-30"/>
+                    <p className="text-sm text-muted-foreground">
+                      {productSearch ? "Aucun produit trouvé pour cette recherche" : "Ce dépanneur n\'a pas encore de produits dans le catalogue"}
+                    </p>
+                    {!productSearch && (
+                      <p className="text-xs text-orange-500">Le commerçant doit ajouter ses produits depuis son espace store</p>
+                    )}
+                  </div>
                 ) : (
                   // Grouper par catégorie
                   Object.entries(
