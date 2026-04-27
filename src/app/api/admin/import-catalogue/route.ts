@@ -20,6 +20,8 @@ export async function POST(req: NextRequest) {
     // Déterminer la catégorie selon le type de catalogue
     const catConfig = catalogueType === "fruits"
       ? { name: "Fruits & Légumes", slug: "fruits-legumes", emoji: "🥦", order: 1 }
+      : catalogueType === "alimentation"
+      ? { name: "Alimentation", slug: "alimentation", emoji: "🛒", order: 2 }
       : { name: "Pharmacie / Santé", slug: "pharmacie-sante", emoji: "💊", order: 0 };
 
     const catSnap = await adminDb.collection("categories")
@@ -38,7 +40,7 @@ export async function POST(req: NextRequest) {
 
     // Créer les sous-catégories
     const subCatIds: Record<string, string> = {};
-    const uniqueSubs = [...new Set(products.map((p: any) => p.subcategory))];
+    const uniqueSubs = [...new Set(products.map((p: any) => p.subcategory).filter(Boolean))];
     
     for (const subName of uniqueSubs) {
       const subSnap = await adminDb.collection("subcategories")
@@ -81,7 +83,9 @@ export async function POST(req: NextRequest) {
           categoryId,
           categoryName: catConfig.name,
           subcategoryId: subCatIds[p.subcategory] || "",
-          subcategoryName: p.subcategory,
+          subcategoryName: p.subcategory || "",
+          department: p.department || "",
+          section: p.section || "",
           sku: p.sku,
           name: p.name || p.name_fr || "",
           brand: p.brand || "",

@@ -49,3 +49,4 @@ scripts/serviceAccount.json
 !public/montreal_zones.json
 !public/catalogue-otc.json
 !public/catalogue-fruits-legumes.json
+!public/catalogue-alimentation.json
