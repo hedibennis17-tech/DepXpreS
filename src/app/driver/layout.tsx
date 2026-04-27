@@ -75,16 +75,7 @@ export default function DriverLayout({ children }: { children: React.ReactNode }
             </div>
           </div>
 
-          {/* Toggle Online */}
-          <button onClick={() => setOnline(v => !v)}
-            className={`flex items-center gap-2 px-4 py-2 rounded-full text-xs font-bold transition-all ${
-              online
-                ? "bg-green-500/20 border border-green-500/40 text-green-400"
-                : "bg-white/5 border border-white/10 text-gray-400"
-            }`}>
-            <span className={`w-2 h-2 rounded-full ${online ? "bg-green-400 animate-pulse" : "bg-gray-600"}`} />
-            {online ? "En ligne" : "Hors ligne"}
-          </button>
+
 
           {/* Right actions */}
           <div className="flex items-center gap-2">
