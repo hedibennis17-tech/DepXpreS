@@ -90,9 +90,14 @@ export async function POST(req: NextRequest) {
           name: p.name || p.name_fr || "",
           brand: p.brand || "",
           description: p.activeIngredient ? `Ingrédient actif: ${p.activeIngredient}` : "",
-          price: typeof p.priceEstimateCAD === "object"
-              ? Math.round(((p.priceEstimateCAD.min||0)+(p.priceEstimateCAD.max||0))/2*100)/100
-              : (p.price || p.priceEstimateCAD || 0),
+          price: (()=>{
+            if (p.price && p.price > 0) return p.price;
+            if (p.priceEstimateCAD && typeof p.priceEstimateCAD === "object" && p.priceEstimateCAD !== null) {
+              return Math.round(((p.priceEstimateCAD.min||0)+(p.priceEstimateCAD.max||0))/2*100)/100;
+            }
+            if (typeof p.priceEstimateCAD === "number") return p.priceEstimateCAD;
+            return 0;
+          })(),
           imageUrl: p.imageUrl || "",
           inStock: true,
           stock: 50, // stock par défaut
