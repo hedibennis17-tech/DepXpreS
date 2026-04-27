@@ -2,39 +2,22 @@
 import { useState, useEffect, useRef } from "react";
 import { auth, db } from "@/lib/firebase";
 import { onAuthStateChanged, User as FirebaseUser } from "firebase/auth";
-import { collection, query, where, getDocs, limit, orderBy } from "firebase/firestore";
-import { TAXONOMY } from "@/lib/taxonomy";
+import { collection, query, getDocs, limit } from "firebase/firestore";
 import { ACTIVE_ZONES, getNeighborZones, searchZones, type DeliveryZone } from "@/lib/delivery-zones";
 import Link from "next/link";
 import {
   Search, MapPin, ChevronRight, Star, Clock, Zap,
-  Store, Package, ArrowRight, TrendingUp, ShieldCheck, ChevronLeft
+  Store, Package, ArrowRight, ShieldCheck, Bell, User,
+  Heart, ShoppingCart, ChevronDown, Leaf, Snowflake
 } from "lucide-react";
 
 interface Product {
   id: string; name: string; price: number;
   imageUrl?: string; categoryName?: string; subcategoryName?: string;
-  storeId: string; storeName?: string; isAvailable?: boolean;
+  department?: string; section?: string;
+  storeId: string; storeName?: string;
+  isOrganic?: boolean; isFrozen?: boolean; isFresh?: boolean;
 }
-
-const HOME_BLOCKS = [
-  { key: "boissons",     label: "🥤 Boissons",         cats: ["boissons"] },
-  { key: "alcool",       label: "🍺 Alcool & bières",   cats: ["alcool"] },
-  { key: "snacks",       label: "🍿 Snacks & chips",    cats: ["snacks", "collations & snacks", "collations"] },
-  { key: "chocolat",     label: "🍫 Chocolat & bonbons",cats: ["chocolat"] },
-  { key: "tabac",        label: "🚬 Tabac & vapotage",  cats: ["tabac"] },
-  { key: "epicerie",     label: "🛒 Épicerie",          cats: ["epicerie", "épicerie"] },
-  { key: "hygiene",      label: "🧴 Hygiène & ménager", cats: ["hygiene", "hygiène"] },
-  { key: "loterie",      label: "🎰 Loterie & divers",  cats: ["loterie"] },
-  { key: "fleurs",       label: "🌸 Fleurs",            cats: ["fleurs"] },
-  { key: "electronique", label: "🔌 Électronique",      cats: ["electronique", "électronique"] },
-];
-
-function matchBlock(p: Product, cats: string[]): boolean {
-  const cat = (p.categoryName || "").toLowerCase();
-  return cats.some(c => cat.includes(c.toLowerCase()));
-}
-
 interface StoreData {
   id: string; name: string; address?: string; zoneName?: string;
   isOpen?: boolean; rating?: number; totalOrders?: number;
@@ -42,588 +25,524 @@ interface StoreData {
   deliveryTime?: number; minOrder?: number;
 }
 
+// Catégories alignées avec les catalogues importés
+const CATEGORIES = [
+  { key: "all",         emoji: "🏠", label: "Accueil",       match: [] },
+  { key: "alimentation",emoji: "🛒", label: "Épicerie",      match: ["alimentation","produits frais","garde-manger","produits laitiers","aliments congelés","boissons"] },
+  { key: "fruits",      emoji: "🥦", label: "Fruits & Légumes", match: ["fruits","légumes","fruits & légumes"] },
+  { key: "viandes",     emoji: "🥩", label: "Boucherie",     match: ["viandes","poissons","charcuterie"] },
+  { key: "pharma",      emoji: "💊", label: "Pharmacie",     match: ["pharmacie","santé","otc"] },
+  { key: "snacks",      emoji: "🍿", label: "Collations",    match: ["collations","snacks","chips"] },
+  { key: "boissons",    emoji: "🧃", label: "Boissons",      match: ["boissons","jus","eaux"] },
+  { key: "boulangerie", emoji: "🍞", label: "Boulangerie",   match: ["boulangerie","pain"] },
+  { key: "bebe",        emoji: "👶", label: "Bébé",          match: ["bébé","enfant","bebe","aliments pour bébés"] },
+  { key: "bio",         emoji: "🌿", label: "Bio",           match: ["bio"] },
+  { key: "congeles",    emoji: "❄️", label: "Surgelés",      match: ["congelés","surgelés","frozen"] },
+  { key: "vitamines",   emoji: "💪", label: "Vitamines",     match: ["vitamines","naturels"] },
+];
 
+function matchCat(p: Product, key: string): boolean {
+  if (key === "all") return true;
+  if (key === "bio") return !!p.isOrganic;
+  if (key === "congeles") return !!p.isFrozen;
+  const cat = CATEGORIES.find(c=>c.key===key);
+  if (!cat) return false;
+  const fields = [
+    p.categoryName||"", p.subcategoryName||"",
+    p.department||"", p.section||""
+  ].map(f=>f.toLowerCase());
+  return cat.match.some(m => fields.some(f => f.includes(m.toLowerCase())));
+}
 
-// Top catégories pour la page accueil
-const TOP_CATEGORIES = [
-  { emoji: "🛒", label: "Épicerie", slug: "depanneur-epicerie" },
-  { emoji: "🌸", label: "Fleurs", slug: "fleuriste" },
-  { emoji: "🥩", label: "Boucherie", slug: "boucherie" },
-  { emoji: "🎂", label: "Pâtisserie", slug: "patisserie" },
-  { emoji: "🥦", label: "Fruits & Légumes", slug: "fruiterie-legumes" },
-  { emoji: "💊", label: "Pharmacie", slug: "pharmacie-independante" },
-  { emoji: "👶", label: "Bébé", slug: "boutique-bebe" },
-  { emoji: "🐾", label: "Animalerie", slug: "animalerie" },
-  { emoji: "🥖", label: "Boulangerie", slug: "boulangerie-artisanale" },
-  { emoji: "🌿", label: "Bio & Vrac", slug: "epicerie-bio-vrac" },
+// Sections produits pour la home
+const SECTIONS = [
+  { key:"alimentation", emoji:"🛒", label:"Épicerie & Alimentation", color:"#f97316", bg:"#fff7ed" },
+  { key:"fruits",       emoji:"🥦", label:"Fruits & Légumes",        color:"#22c55e", bg:"#f0fdf4" },
+  { key:"pharma",       emoji:"💊", label:"Pharmacie & Santé",       color:"#3b82f6", bg:"#eff6ff" },
+  { key:"viandes",      emoji:"🥩", label:"Boucherie & Poissons",    color:"#ef4444", bg:"#fef2f2" },
+  { key:"boissons",     emoji:"🧃", label:"Boissons",                color:"#8b5cf6", bg:"#f5f3ff" },
+  { key:"snacks",       emoji:"🍿", label:"Collations & Snacks",     color:"#f59e0b", bg:"#fffbeb" },
+  { key:"bebe",         emoji:"👶", label:"Bébé & Enfant",           color:"#ec4899", bg:"#fdf2f8" },
+  { key:"bio",          emoji:"🌿", label:"Produits Bio",            color:"#10b981", bg:"#ecfdf5" },
+  { key:"congeles",     emoji:"❄️", label:"Produits Surgelés",       color:"#06b6d4", bg:"#ecfeff" },
+  { key:"vitamines",    emoji:"💪", label:"Vitamines & Santé Nat.",  color:"#84cc16", bg:"#f7fee7" },
 ];
 
 export default function ClientHome() {
-  const [user, setUser] = useState<FirebaseUser | null>(null);
-  const [currentZone, setCurrentZone] = useState<DeliveryZone | null>(null);
-  const [zone, setZone] = useState("Chomedey");
-  const [showZonePicker, setShowZonePicker] = useState(false);
-  const [zoneSearch, setZoneSearch] = useState("");
-
-  // Trouver la zone par défaut (Chomedey)
-  useEffect(() => {
-    const defaultZone = ACTIVE_ZONES.find(z => z.slug === "chomedey");
-    if (defaultZone) { setCurrentZone(defaultZone); setZone(defaultZone.name); }
-  }, []);
-  const [stores, setStores] = useState<StoreData[]>([]);
+  const [user,         setUser]         = useState<FirebaseUser|null>(null);
+  const [zone,         setZone]         = useState("Chomedey");
+  const [currentZone,  setCurrentZone]  = useState<DeliveryZone|null>(null);
+  const [showZonePicker,setShowZonePicker] = useState(false);
+  const [zoneSearch,   setZoneSearch]   = useState("");
+  const [stores,       setStores]       = useState<StoreData[]>([]);
   const [nearbyStores, setNearbyStores] = useState<StoreData[]>([]);
-  const [homeProducts, setHomeProducts] = useState<Product[]>([]);
-  const [loading, setLoading] = useState(true);
-  const [search, setSearch] = useState("");
-  const [searchResults, setSearchResults] = useState<{ name: string; storeId: string; storeName: string; price: number; imageUrl?: string }[]>([]);
-  const [searching, setSearching] = useState(false);
-  const [selectedCat, setSelectedCat] = useState<string | null>(null);
+  const [products,     setProducts]     = useState<Product[]>([]);
+  const [loading,      setLoading]      = useState(true);
+  const [search,       setSearch]       = useState("");
+  const [searchResults,setSearchResults]= useState<any[]>([]);
+  const [searching,    setSearching]    = useState(false);
+  const [activeCat,    setActiveCat]    = useState("all");
   const searchRef = useRef<HTMLDivElement>(null);
+  const catRef    = useRef<HTMLDivElement>(null);
 
-  useEffect(() => {
-    const unsub = onAuthStateChanged(auth, setUser);
-    return () => unsub();
-  }, []);
+  useEffect(()=>{
+    const unsub = onAuthStateChanged(auth, u=>setUser(u));
+    return ()=>unsub();
+  },[]);
 
-  // Charger les stores de la zone
-  useEffect(() => {
-    async function loadStores() {
+  useEffect(()=>{
+    async function load() {
       setLoading(true);
       try {
-        // Stores zone principale — chercher par nom ET slug
-        const zoneNames = currentZone
-          ? [currentZone.name, ...currentZone.aliases]
-          : [zone];
-
-        const q = query(
-          collection(db, "stores"),
-          where("status", "==", "active"),
-          limit(50)
-        );
-        const snap = await getDocs(q);
-        const allStores = snap.docs.map(d => ({ id: d.id, ...d.data() } as StoreData));
-
-        // Filtrer par zone
-        const mainStores = allStores.filter(s =>
-          zoneNames.some(n => s.zoneName?.toLowerCase().includes(n.toLowerCase()) ||
-            n.toLowerCase().includes(s.zoneName?.toLowerCase() || "xxx"))
-        );
-        setStores(mainStores.length > 0 ? mainStores : allStores.slice(0, 10));
-
-        // Zones voisines depuis delivery-zones
-        if (currentZone) {
-          const neighborZones = getNeighborZones(currentZone.id);
-          const neighborNames = neighborZones.flatMap(z => [z.name, ...z.aliases]);
-          const nearbyList = allStores.filter(s =>
-            !mainStores.find(m => m.id === s.id) &&
-            neighborNames.some(n => s.zoneName?.toLowerCase().includes(n.toLowerCase()))
-          );
-          setNearbyStores(nearbyList.slice(0, 8));
-        }
-        // Charger tous les produits disponibles (isAvailable OR isActive)
-        const allProductsList: Product[] = [];
-        try {
-          const pq = query(collection(db, "products"), limit(80));
-          const psnap = await getDocs(pq);
-          // Map storeId → storeName
-          const storeMap: Record<string, string> = {};
-          [...mainStores, ...allStores].forEach(s => { storeMap[s.id] = s.name; });
-          psnap.docs.forEach(d => {
-            const data = d.data();
-            // Accepter si isAvailable !== false ET (isActive === true OR isAvailable === true)
-            // Accepter si isAvailable OU isActive est true (les 2 schémas coexistent)
-            const available = data.isAvailable === true || data.isActive === true ||
-              (data.isAvailable === undefined && data.isActive === undefined);
-            if (available && data.price && data.name) {
-              allProductsList.push({
-                id: d.id,
-                name: data.name || "",
-                price: data.price || 0,
-                imageUrl: data.imageUrl || "",
-                categoryName: data.categoryName || data.category || "",
-                subcategoryName: data.subcategoryName || "",
-                storeId: data.storeId || "",
-                storeName: data.storeName || storeMap[data.storeId] || data.storeName || "Commerce",
-                isAvailable: available,
-              } as Product);
-            }
-          });
-        } catch (e) { console.error("products load:", e); }
-        setHomeProducts(allProductsList);
-
-      } catch (e) {
-        console.error(e);
-      } finally {
-        setLoading(false);
-      }
+        // Stores
+        const snap = await getDocs(collection(db,"stores"));
+        const list = snap.docs.map(d=>({id:d.id,...d.data()} as StoreData));
+        setStores(list.filter(s=>s.isOpen));
+        setNearbyStores(list.filter(s=>!s.isOpen).slice(0,4));
+        // Produits
+        const psnap = await getDocs(query(collection(db,"products"),limit(500)));
+        const prods = psnap.docs.map(d=>{
+          const data = d.data();
+          return {
+            id:d.id,
+            name: data.name||data.name_fr||"",
+            price: data.price||0,
+            imageUrl: data.imageUrl||"",
+            categoryName: data.categoryName||data.category||"",
+            subcategoryName: data.subcategoryName||data.subcategory||"",
+            department: data.department||"",
+            section: data.section||"",
+            storeId: data.storeId||"",
+            storeName: data.storeName||list.find(s=>s.id===data.storeId)?.name||"Commerce",
+            isOrganic: data.isOrganic||false,
+            isFrozen: data.isFrozen||false,
+            isFresh: data.isFresh||false,
+          } as Product;
+        }).filter(p=>p.name&&p.price>0);
+        setProducts(prods);
+      } catch(e){console.error(e);}
+      finally{setLoading(false);}
     }
-    loadStores();
-  }, [zone, currentZone]);
+    load();
+  },[zone]);
 
-  // Recherche autocomplete
-  useEffect(() => {
-    if (!search.trim() || search.length < 2) {
-      setSearchResults([]);
-      return;
-    }
-    const timer = setTimeout(async () => {
+  // Recherche
+  useEffect(()=>{
+    if (!search.trim()||search.length<2){setSearchResults([]);return;}
+    const t = setTimeout(()=>{
       setSearching(true);
-      try {
-        const q = query(
-          collection(db, "products"),
-          where("isAvailable", "==", true),
-          limit(8)
-        );
-        const snap = await getDocs(q);
-        const results = snap.docs
-          .map(d => ({ id: d.id, ...d.data() } as { id: string; name: string; storeId: string; storeName: string; price: number; imageUrl?: string }))
-          .filter(p => p.name?.toLowerCase().includes(search.toLowerCase()));
-        setSearchResults(results);
-      } catch {}
+      const r = products.filter(p=>p.name.toLowerCase().includes(search.toLowerCase())).slice(0,8);
+      setSearchResults(r);
       setSearching(false);
-    }, 300);
-    return () => clearTimeout(timer);
-  }, [search]);
+    },200);
+    return ()=>clearTimeout(t);
+  },[search,products]);
 
-  const filteredStores = selectedCat
-    ? stores.filter(s => {
-        const ct = TAXONOMY.find(t => t.slug === selectedCat);
-        return s.commerceTypeName === ct?.name;
-      })
-    : stores;
+  const filteredProducts = activeCat==="all" ? products : products.filter(p=>matchCat(p,activeCat));
+  const bio = products.filter(p=>p.isOrganic);
+  const frozen = products.filter(p=>p.isFrozen);
 
   return (
-    <div className="min-h-screen bg-gray-50 pb-20 md:pb-0">
+    <div className="min-h-screen pb-24 md:pb-0" style={{background:"#f8f9fb"}}>
+      <style>{`
+        @import url('https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;600;700;800&display=swap');
+        body{font-family:'Plus Jakarta Sans',sans-serif;}
+        .scrollbar-hide::-webkit-scrollbar{display:none;}
+        .scrollbar-hide{-ms-overflow-style:none;scrollbar-width:none;}
+        @keyframes shimmer{0%{background-position:-200% 0}100%{background-position:200% 0}}
+        .shimmer{background:linear-gradient(90deg,#f0f0f0 25%,#e0e0e0 50%,#f0f0f0 75%);background-size:200% 100%;animation:shimmer 1.5s infinite;}
+        @keyframes fadeUp{from{opacity:0;transform:translateY(10px)}to{opacity:1;transform:translateY(0)}}
+        .fade-up{animation:fadeUp .4s ease forwards;}
+      `}</style>
 
-      {/* ── HERO ─────────────────────────────────────────────────── */}
-      <div className="bg-gradient-to-br from-gray-900 via-gray-800 to-orange-900 text-white pt-8 pb-16 px-4 relative overflow-hidden">
-        {/* Decorative circles */}
-        <div className="absolute top-0 right-0 w-64 h-64 bg-orange-500/10 rounded-full -translate-y-1/2 translate-x-1/2" />
-        <div className="absolute bottom-0 left-0 w-48 h-48 bg-orange-500/10 rounded-full translate-y-1/2 -translate-x-1/2" />
+      {/* ── HERO — version mobile dark, version desktop gradient ── */}
+      <div className="relative overflow-hidden" style={{background:"linear-gradient(145deg,#0f0f0f 0%,#1a0a00 50%,#2d1200 100%)"}}>
+        {/* Orbs */}
+        <div className="absolute top-0 right-0 w-80 h-80 rounded-full opacity-20 pointer-events-none" style={{background:"radial-gradient(circle,#f97316,transparent)",transform:"translate(30%,-30%)"}}/>
+        <div className="absolute bottom-0 left-0 w-60 h-60 rounded-full opacity-10 pointer-events-none" style={{background:"radial-gradient(circle,#f59e0b,transparent)",transform:"translate(-30%,30%)"}}/>
 
-        <div className="max-w-3xl mx-auto relative">
-          {/* Zone */}
-          <div className="flex items-center gap-2 mb-4 relative">
-            <button onClick={() => setShowZonePicker(v => !v)}
-              className="flex items-center gap-1.5 bg-white/10 backdrop-blur rounded-full px-3 py-1.5 border border-white/20 hover:bg-white/20 transition-colors">
-              <MapPin className="h-3.5 w-3.5 text-orange-400" />
-              <span className="text-sm font-medium">{currentZone?.name || zone}</span>
-              <ChevronRight className="h-3 w-3 text-gray-400" />
+        <div className="relative max-w-7xl mx-auto px-4 pt-6 pb-8 sm:pt-10 sm:pb-12">
+          {/* Top row */}
+          <div className="flex items-center justify-between mb-6">
+            {/* Zone picker */}
+            <button onClick={()=>setShowZonePicker(v=>!v)}
+              className="flex items-center gap-2 bg-white/10 backdrop-blur border border-white/15 rounded-full px-3 py-2 hover:bg-white/15 transition-colors">
+              <MapPin className="h-3.5 w-3.5 text-orange-400"/>
+              <span className="text-sm font-semibold text-white">{zone}</span>
+              <ChevronDown className="h-3 w-3 text-gray-400"/>
             </button>
-
-            {showZonePicker && (
-              <div className="absolute top-10 left-0 w-72 bg-gray-900 border border-white/10 rounded-2xl shadow-2xl z-50 overflow-hidden">
-                <div className="p-3 border-b border-white/10">
-                  <input value={zoneSearch} onChange={e => setZoneSearch(e.target.value)}
-                    placeholder="Chercher votre zone..."
-                    className="w-full bg-white/10 text-white placeholder-gray-500 text-sm px-3 py-2 rounded-xl outline-none border border-white/10 focus:border-orange-500/50" />
-                </div>
-                <div className="max-h-64 overflow-y-auto">
-                  {(zoneSearch.length >= 2 ? searchZones(zoneSearch) : ACTIVE_ZONES.slice(0, 20)).map(z => (
-                    <button key={z.id} onClick={() => { setCurrentZone(z); setZone(z.name); setShowZonePicker(false); setZoneSearch(""); }}
-                      className="w-full flex items-center gap-3 px-4 py-2.5 hover:bg-white/5 transition-colors text-left">
-                      <MapPin className="h-3.5 w-3.5 text-orange-400 shrink-0" />
-                      <div>
-                        <p className="text-sm font-medium text-white">{z.name}</p>
-                        <p className="text-[10px] text-gray-500">{z.city} · {z.estimated_time_min}-{z.estimated_time_max} min</p>
-                      </div>
-                    </button>
-                  ))}
-                </div>
-              </div>
-            )}
+            {/* User */}
+            <div className="flex items-center gap-2">
+              <button className="w-9 h-9 bg-white/10 rounded-full flex items-center justify-center border border-white/10">
+                <Bell className="h-4 w-4 text-gray-300"/>
+              </button>
+              <Link href={user?"/client/profile":"/client/login"}
+                className="w-9 h-9 bg-orange-500 rounded-full flex items-center justify-center">
+                {user
+                  ? <span className="text-white text-xs font-bold">{user.email?.[0]?.toUpperCase()}</span>
+                  : <User className="h-4 w-4 text-white"/>}
+              </Link>
+            </div>
           </div>
 
-          <h1 className="text-3xl md:text-4xl font-bold mb-2 leading-tight">
-            Livraison express<br />
-            <span className="text-orange-400">dans votre quartier</span>
-          </h1>
-          <p className="text-gray-300 text-sm mb-6">
-            {stores.length} commerce{stores.length !== 1 ? "s" : ""} disponible{stores.length !== 1 ? "s" : ""} · Livraison en 30 min
-          </p>
-
-          {/* Search bar */}
-          <div className="relative" ref={searchRef}>
-            <div className="flex items-center gap-3 bg-white rounded-2xl px-4 py-3 shadow-2xl shadow-black/20">
-              <Search className="h-5 w-5 text-gray-400 shrink-0" />
-              <input
-                value={search}
-                onChange={e => setSearch(e.target.value)}
-                placeholder="Rechercher un article, un commerce..."
-                className="flex-1 bg-transparent text-gray-900 text-sm placeholder-gray-400 outline-none font-medium"
-              />
-              {searching && (
-                <div className="w-4 h-4 border-2 border-orange-500 border-t-transparent rounded-full animate-spin shrink-0" />
-              )}
+          {/* Zone picker dropdown */}
+          {showZonePicker && (
+            <div className="absolute top-20 left-4 right-4 sm:left-auto sm:right-auto sm:w-80 bg-gray-900 border border-white/10 rounded-2xl shadow-2xl z-50 overflow-hidden">
+              <div className="p-3 border-b border-white/10">
+                <input value={zoneSearch} onChange={e=>setZoneSearch(e.target.value)}
+                  placeholder="Chercher votre zone..."
+                  className="w-full bg-white/10 text-white placeholder-gray-500 text-sm px-3 py-2 rounded-xl outline-none"/>
+              </div>
+              <div className="max-h-56 overflow-y-auto">
+                {(zoneSearch.length>=2?searchZones(zoneSearch):ACTIVE_ZONES.slice(0,15)).map(z=>(
+                  <button key={z.id} onClick={()=>{setCurrentZone(z);setZone(z.name);setShowZonePicker(false);setZoneSearch("");}}
+                    className="w-full flex items-center gap-3 px-4 py-3 hover:bg-white/5 transition-colors text-left">
+                    <MapPin className="h-3.5 w-3.5 text-orange-400 shrink-0"/>
+                    <div>
+                      <p className="text-sm font-medium text-white">{z.name}</p>
+                      <p className="text-[10px] text-gray-500">{z.city} · {z.estimated_time_min}-{z.estimated_time_max} min</p>
+                    </div>
+                  </button>
+                ))}
+              </div>
             </div>
+          )}
 
-            {/* Autocomplete */}
-            {searchResults.length > 0 && (
-              <div className="absolute top-full left-0 right-0 mt-2 bg-white rounded-2xl shadow-2xl border border-gray-100 overflow-hidden z-50">
-                {searchResults.map((r, i) => (
-                  <Link key={i} href={`/client/store/${r.storeId}`}
-                    onClick={() => { setSearch(""); setSearchResults([]); }}
+          {/* Titre */}
+          <div className="mb-6">
+            <p className="text-orange-400 text-xs font-bold tracking-widest uppercase mb-2">Livraison express 30 min</p>
+            <h1 className="text-3xl sm:text-4xl md:text-5xl font-extrabold text-white leading-tight mb-1">
+              Livré chez vous,<br/>
+              <span style={{background:"linear-gradient(135deg,#f97316,#fbbf24)",WebkitBackgroundClip:"text",WebkitTextFillColor:"transparent",backgroundClip:"text"}}>
+                en un clic
+              </span>
+            </h1>
+            <p className="text-gray-400 text-sm">{stores.length} commerce{stores.length!==1?"s":""} ouverts · {products.length} articles disponibles</p>
+          </div>
+
+          {/* Barre de recherche */}
+          <div className="relative" ref={searchRef}>
+            <div className="flex items-center gap-3 bg-white rounded-2xl px-4 py-3.5 shadow-2xl shadow-orange-900/20">
+              <Search className="h-5 w-5 text-gray-400 shrink-0"/>
+              <input value={search} onChange={e=>setSearch(e.target.value)}
+                placeholder="Advil, pommes, chips, yaourt..."
+                className="flex-1 bg-transparent text-gray-900 text-sm placeholder-gray-400 outline-none font-medium"/>
+              {searching && <div className="w-4 h-4 border-2 border-orange-500 border-t-transparent rounded-full animate-spin shrink-0"/>}
+            </div>
+            {/* Résultats recherche */}
+            {searchResults.length>0 && (
+              <div className="absolute top-full left-0 right-0 mt-2 bg-white rounded-2xl shadow-2xl border border-gray-100 overflow-hidden z-50 max-h-72 overflow-y-auto">
+                {searchResults.map((p,i)=>(
+                  <Link key={i} href={`/client/store/${p.storeId}`}
+                    onClick={()=>{setSearch("");setSearchResults([]);}}
                     className="flex items-center gap-3 px-4 py-3 hover:bg-orange-50 transition-colors border-b last:border-0">
-                    <div className="w-8 h-8 rounded-lg bg-orange-100 flex items-center justify-center text-sm">
-                      {r.imageUrl
-                        ? <img src={r.imageUrl} alt={r.name} className="w-full h-full object-cover rounded-lg" /> // eslint-disable-line
-                        : <Package className="h-4 w-4 text-orange-500" />}
+                    <div className="w-10 h-10 rounded-xl overflow-hidden bg-gray-100 shrink-0">
+                      {p.imageUrl ? <img src={p.imageUrl} alt={p.name} className="w-full h-full object-cover"/> : <Package className="h-5 w-5 text-gray-300 m-auto mt-2.5"/>}
                     </div>
                     <div className="flex-1 min-w-0">
-                      <p className="text-sm font-semibold text-gray-900 truncate">{r.name}</p>
-                      <p className="text-xs text-gray-500">{r.storeName}</p>
+                      <p className="text-sm font-semibold text-gray-900 truncate">{p.name}</p>
+                      <p className="text-xs text-gray-400">{p.storeName} · {p.categoryName}</p>
                     </div>
-                    <span className="text-sm font-bold text-orange-500">${r.price?.toFixed(2)}</span>
+                    <span className="text-sm font-bold text-orange-500 shrink-0">{p.price?.toFixed(2)} $</span>
                   </Link>
                 ))}
               </div>
             )}
           </div>
+
+          {/* Badges stats */}
+          <div className="flex items-center gap-3 mt-4 flex-wrap">
+            {[
+              {icon:"⚡",label:"30 min"},
+              {icon:"🌿",label:`${bio.length} produits bio`},
+              {icon:"❄️",label:`${frozen.length} surgelés`},
+              {icon:"🛒",label:`${products.length} articles`},
+            ].map(b=>(
+              <div key={b.label} className="flex items-center gap-1.5 bg-white/8 border border-white/10 rounded-full px-3 py-1.5">
+                <span className="text-xs">{b.icon}</span>
+                <span className="text-xs text-gray-300 font-medium">{b.label}</span>
+              </div>
+            ))}
+          </div>
         </div>
       </div>
 
-      <div className="max-w-7xl mx-auto px-4 -mt-6">
-        <div className="flex gap-6 items-start">
-          {/* Colonne principale */}
-          <div className="flex-1 min-w-0 space-y-8">
+      {/* ── CONTENU PRINCIPAL ── */}
+      <div className="max-w-7xl mx-auto px-4 py-6 space-y-8">
 
-        {/* ── STATS ──────────────────────────────────────────────── */}
-        <div className="grid grid-cols-3 gap-3">
-          {[
-            { icon: Zap, value: "30 min", label: "Livraison", color: "text-orange-500", bg: "bg-orange-50" },
-            { icon: Store, value: `${stores.length}+`, label: "Commerces", color: "text-blue-500", bg: "bg-blue-50" },
-            { icon: ShieldCheck, value: "100%", label: "Sécurisé", color: "text-green-500", bg: "bg-green-50" },
-          ].map((s, i) => (
-            <div key={i} className="bg-white rounded-2xl p-4 shadow-sm border border-gray-100 text-center">
-              <div className={`w-8 h-8 rounded-xl ${s.bg} flex items-center justify-center mx-auto mb-2`}>
-                <s.icon className={`h-4 w-4 ${s.color}`} />
-              </div>
-              <p className="text-lg font-bold text-gray-900">{s.value}</p>
-              <p className="text-xs text-gray-500">{s.label}</p>
-            </div>
-          ))}
-        </div>
-
-        {/* ── CATÉGORIES ─────────────────────────────────────────── */}
+        {/* ── CATÉGORIES SCROLL ── */}
         <div>
-          <div className="flex items-center justify-between mb-4">
-            <h2 className="text-lg font-bold text-gray-900">Catégories</h2>
-            <button onClick={() => setSelectedCat(null)}
-              className={`text-xs font-medium ${!selectedCat ? "text-orange-500" : "text-gray-400"}`}>
-              Tout voir
-            </button>
-          </div>
-          <div className="flex gap-3 overflow-x-auto pb-2 scrollbar-hide">
-            {TOP_CATEGORIES.map(cat => (
-              <button key={cat.slug}
-                onClick={() => setSelectedCat(selectedCat === cat.slug ? null : cat.slug)}
-                className={`flex flex-col items-center gap-2 px-4 py-3 rounded-2xl border shrink-0 transition-all ${
-                  selectedCat === cat.slug
+          <div ref={catRef} className="flex gap-2.5 overflow-x-auto pb-2 scrollbar-hide -mx-4 px-4">
+            {CATEGORIES.map(cat=>(
+              <button key={cat.key}
+                onClick={()=>setActiveCat(cat.key)}
+                className={`flex flex-col items-center gap-1.5 px-4 py-3 rounded-2xl border shrink-0 transition-all text-center ${
+                  activeCat===cat.key
                     ? "bg-orange-500 border-orange-500 text-white shadow-md shadow-orange-200"
-                    : "bg-white border-gray-100 text-gray-700 hover:border-orange-200"
+                    : "bg-white border-gray-200 text-gray-700 hover:border-orange-300"
                 }`}>
-                <span className="text-2xl">{cat.emoji}</span>
-                <span className="text-xs font-semibold whitespace-nowrap">{cat.label}</span>
+                <span className="text-xl leading-none">{cat.emoji}</span>
+                <span className="text-[11px] font-bold whitespace-nowrap">{cat.label}</span>
               </button>
             ))}
           </div>
         </div>
 
-        {/* ── COMMERCES DANS VOTRE ZONE ──────────────────────────── */}
-        <div>
-          <div className="flex items-center justify-between mb-4">
-            <div>
-              <h2 className="text-lg font-bold text-gray-900">
-                Commerces ouverts
-              </h2>
-              <p className="text-xs text-gray-500 flex items-center gap-1 mt-0.5">
-                <MapPin className="h-3 w-3" />{zone}
-              </p>
-            </div>
-            <div className="flex items-center gap-1 text-green-500">
-              <span className="w-2 h-2 rounded-full bg-green-500 animate-pulse" />
-              <span className="text-xs font-semibold">En direct</span>
-            </div>
-          </div>
+        <div className="flex gap-6 items-start">
+          {/* ── COLONNE PRINCIPALE ── */}
+          <div className="flex-1 min-w-0 space-y-6">
 
-          {loading ? (
-            <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-              {[1, 2, 3, 4].map(i => (
-                <div key={i} className="bg-white rounded-2xl h-32 animate-pulse border border-gray-100" />
-              ))}
-            </div>
-          ) : filteredStores.length === 0 ? (
-            <div className="bg-white rounded-2xl p-8 text-center border border-gray-100">
-              <Store className="h-10 w-10 text-gray-300 mx-auto mb-3" />
-              <p className="text-gray-500 text-sm font-medium">Aucun commerce disponible dans votre zone</p>
-              <p className="text-gray-400 text-xs mt-1">Vérifiez les zones voisines ci-dessous</p>
-            </div>
-          ) : (
-            <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-              {filteredStores.map(store => (
-                <StoreCard key={store.id} store={store} />
-              ))}
-            </div>
-          )}
-        </div>
+            {/* ── COMMERCES OUVERTS ── */}
+            {stores.length>0 && (
+              <div>
+                <div className="flex items-center justify-between mb-3">
+                  <h2 className="text-base font-bold text-gray-900 flex items-center gap-2">
+                    <span className="w-2 h-2 bg-green-500 rounded-full animate-pulse"/>
+                    Commerces ouverts
+                  </h2>
+                  <span className="text-xs text-gray-400">{stores.length} disponibles</span>
+                </div>
+                <div className="flex gap-3 overflow-x-auto pb-2 scrollbar-hide -mx-4 px-4 md:mx-0 md:px-0 md:grid md:grid-cols-2 lg:grid-cols-3">
+                  {loading ? [1,2,3].map(i=>(
+                    <div key={i} className="shrink-0 w-64 md:w-auto h-36 rounded-2xl shimmer"/>
+                  )) : stores.slice(0,6).map(store=>(
+                    <StoreCard key={store.id} store={store}/>
+                  ))}
+                </div>
+              </div>
+            )}
 
-        {/* ── ZONES VOISINES ─────────────────────────────────────── */}
-        {nearbyStores.length > 0 && (
-          <div>
-            <div className="flex items-center gap-2 mb-4">
-              <TrendingUp className="h-4 w-4 text-orange-500" />
-              <h2 className="text-lg font-bold text-gray-900">Zones voisines</h2>
-              <span className="text-xs text-gray-400 bg-gray-100 px-2 py-0.5 rounded-full">
-                {nearbyStores.length} commerce{nearbyStores.length > 1 ? "s" : ""}
-              </span>
-            </div>
-            <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-              {nearbyStores.map(store => (
-                <StoreCard key={store.id} store={store} nearby />
-              ))}
-            </div>
-          </div>
-        )}
-
-        {/* ── BLOCS ARTICLES PAR CATÉGORIE ─────────────────────── */}
-        {homeProducts.length > 0 && (
-          <div className="space-y-4">
-            <div className="flex items-center justify-between">
-              <h2 className="text-lg font-bold text-gray-900">Articles disponibles</h2>
-              <span className="text-xs text-gray-400 bg-gray-100 px-2 py-1 rounded-full">
-                {homeProducts.length} articles
-              </span>
-            </div>
-            {HOME_BLOCKS.map(block => {
-              const blockProducts = homeProducts.filter(p => matchBlock(p, block.cats));
-              if (blockProducts.length === 0) return null;
-              return (
-                <div key={block.key} className="bg-white rounded-2xl border border-gray-100 shadow-sm overflow-hidden">
-                  <div className="flex items-center justify-between px-4 py-3 border-b border-gray-50">
-                    <h3 className="text-sm font-bold text-gray-900">{block.label}</h3>
-                    <span className="text-xs text-gray-400">{blockProducts.length} article{blockProducts.length > 1 ? "s" : ""}</span>
+            {/* ── SECTIONS PRODUITS ── */}
+            {activeCat==="all" ? (
+              // Vue accueil — toutes les sections
+              SECTIONS.map(sec=>{
+                const prods = products.filter(p=>matchCat(p,sec.key)).slice(0,10);
+                if (prods.length===0) return null;
+                return (
+                  <div key={sec.key} className="fade-up">
+                    <div className="flex items-center justify-between mb-3">
+                      <h2 className="text-base font-bold text-gray-900 flex items-center gap-2">
+                        <span className="w-8 h-8 rounded-xl flex items-center justify-center text-base"
+                          style={{background:sec.bg}}>{sec.emoji}</span>
+                        {sec.label}
+                      </h2>
+                      <button onClick={()=>setActiveCat(sec.key)}
+                        className="text-xs font-semibold text-orange-500 flex items-center gap-0.5">
+                        Tout voir <ChevronRight className="h-3.5 w-3.5"/>
+                      </button>
+                    </div>
+                    <div className="flex gap-3 overflow-x-auto pb-2 scrollbar-hide -mx-4 px-4 md:mx-0 md:px-0">
+                      {prods.map(p=><ProductCard key={p.id} product={p}/>)}
+                    </div>
                   </div>
-                  <div className="flex overflow-x-auto divide-x divide-gray-50 scrollbar-hide">
-                    {blockProducts.slice(0, 8).map(p => (
-                      <Link key={p.id} href={p.storeId ? `/client/store/${p.storeId}` : "/client"}
-                        className="shrink-0 w-36 p-3 flex flex-col gap-2 hover:bg-orange-50/50 transition-colors">
-                        <div className="w-full aspect-square rounded-xl overflow-hidden bg-gray-50 flex items-center justify-center">
-                          {p.imageUrl
-                            ? <img src={p.imageUrl} alt={p.name} className="w-full h-full object-cover" />
-                            : <Package className="h-6 w-6 text-gray-200" />}
-                        </div>
-                        <div>
-                          <p className="text-xs font-bold text-gray-900 line-clamp-2 leading-tight">{p.name}</p>
-                          {p.storeName && <p className="text-[10px] text-gray-400 truncate mt-0.5">{p.storeName}</p>}
-                          <p className="text-xs font-bold text-orange-500 mt-1">${p.price?.toFixed(2)}</p>
-                        </div>
-                      </Link>
+                );
+              })
+            ) : (
+              // Vue catégorie filtrée
+              <div className="fade-up">
+                <div className="flex items-center justify-between mb-4">
+                  <h2 className="text-base font-bold text-gray-900">
+                    {CATEGORIES.find(c=>c.key===activeCat)?.emoji}{" "}
+                    {CATEGORIES.find(c=>c.key===activeCat)?.label}
+                  </h2>
+                  <span className="text-xs text-gray-400 bg-gray-100 px-2 py-1 rounded-full">
+                    {filteredProducts.length} articles
+                  </span>
+                </div>
+                {filteredProducts.length===0 ? (
+                  <div className="bg-white rounded-2xl p-8 text-center border border-gray-100">
+                    <Package className="h-10 w-10 text-gray-200 mx-auto mb-3"/>
+                    <p className="text-gray-500 text-sm font-medium">Aucun produit dans cette catégorie</p>
+                  </div>
+                ) : (
+                  <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 gap-3">
+                    {filteredProducts.slice(0,40).map(p=>(
+                      <ProductCardGrid key={p.id} product={p}/>
                     ))}
                   </div>
-                </div>
-              );
-            })}
+                )}
+              </div>
+            )}
 
-            {/* Autres articles non catégorisés */}
-            {(() => {
-              const catIds = new Set(HOME_BLOCKS.flatMap(b =>
-                homeProducts.filter(p => matchBlock(p, b.cats)).map(p => p.id)
-              ));
-              const others = homeProducts.filter(p => !catIds.has(p.id));
-              if (others.length === 0) return null;
-              return (
-                <div className="bg-white rounded-2xl border border-gray-100 shadow-sm overflow-hidden">
-                  <div className="flex items-center justify-between px-4 py-3 border-b border-gray-50">
-                    <h3 className="text-sm font-bold text-gray-900">📦 Autres articles</h3>
-                    <span className="text-xs text-gray-400">{others.length} article{others.length > 1 ? "s" : ""}</span>
-                  </div>
-                  <div className="flex overflow-x-auto divide-x divide-gray-50 scrollbar-hide">
-                    {others.slice(0, 8).map(p => (
-                      <Link key={p.id} href={p.storeId ? `/client/store/${p.storeId}` : "/client"}
-                        className="shrink-0 w-36 p-3 flex flex-col gap-2 hover:bg-orange-50/50 transition-colors">
-                        <div className="w-full aspect-square rounded-xl overflow-hidden bg-gray-50 flex items-center justify-center">
-                          {p.imageUrl
-                            ? <img src={p.imageUrl} alt={p.name} className="w-full h-full object-cover" />
-                            : <Package className="h-6 w-6 text-gray-200" />}
-                        </div>
-                        <div>
-                          <p className="text-xs font-bold text-gray-900 line-clamp-2">{p.name}</p>
-                          {p.storeName && <p className="text-[10px] text-gray-400 truncate">{p.storeName}</p>}
-                          <p className="text-xs font-bold text-orange-500">${p.price?.toFixed(2)}</p>
-                        </div>
-                      </Link>
-                    ))}
-                  </div>
-                </div>
-              );
-            })()}
+            {/* ── CTA inscription ── */}
+            {!user && (
+              <div className="rounded-3xl p-6 text-white relative overflow-hidden fade-up"
+                style={{background:"linear-gradient(135deg,#f97316,#ea580c)"}}>
+                <div className="absolute top-0 right-0 w-32 h-32 bg-white/10 rounded-full -translate-y-1/2 translate-x-1/2"/>
+                <h3 className="text-xl font-extrabold mb-2">🎉 Première livraison gratuite</h3>
+                <p className="text-orange-100 text-sm mb-4">Inscrivez-vous et profitez de la livraison offerte. Code: <span className="font-mono font-bold bg-white/20 px-1.5 py-0.5 rounded">DEPXPRES1</span></p>
+                <Link href="/client/signup"
+                  className="inline-flex items-center gap-2 bg-white text-orange-600 font-bold text-sm px-5 py-2.5 rounded-xl hover:bg-orange-50 transition-colors">
+                  Créer mon compte <ArrowRight className="h-4 w-4"/>
+                </Link>
+              </div>
+            )}
           </div>
-        )}
 
-        {/* ── CTA inscription ────────────────────────────────────── */}
-        {!user && (
-          <div className="bg-gradient-to-r from-orange-500 to-orange-600 rounded-3xl p-6 text-white relative overflow-hidden">
-            <div className="absolute top-0 right-0 w-32 h-32 bg-white/10 rounded-full -translate-y-1/2 translate-x-1/2" />
-            <h3 className="text-xl font-bold mb-2">Première livraison gratuite 🎉</h3>
-            <p className="text-orange-100 text-sm mb-4">Inscrivez-vous et profitez de la livraison offerte sur votre première commande.</p>
-            <Link href="/client/signup"
-              className="inline-flex items-center gap-2 bg-white text-orange-600 font-semibold text-sm px-5 py-2.5 rounded-xl hover:bg-orange-50 transition-colors">
-              Créer mon compte <ArrowRight className="h-4 w-4" />
-            </Link>
-          </div>
-        )}
-          </div>{/* fin colonne principale */}
+          {/* ── SIDEBAR DESKTOP ── */}
+          <div className="hidden lg:flex flex-col gap-4 w-80 xl:w-96 shrink-0 sticky top-20">
+            {/* Infos zone */}
+            <div className="bg-white rounded-2xl border border-gray-100 shadow-sm p-4">
+              <h3 className="text-sm font-bold text-gray-900 mb-3 flex items-center gap-2">
+                <MapPin className="h-4 w-4 text-orange-500"/>Votre zone
+              </h3>
+              <div className="space-y-2">
+                {[
+                  {l:"Zone",v:zone},
+                  {l:"Délai",v:"25–35 min",c:"text-orange-500"},
+                  {l:"Commerces",v:`${stores.length} ouverts`},
+                  {l:"Articles",v:`${products.length} disponibles`},
+                ].map(r=>(
+                  <div key={r.l} className="flex justify-between text-xs">
+                    <span className="text-gray-400">{r.l}</span>
+                    <span className={`font-semibold ${(r as any).c||"text-gray-900"}`}>{r.v}</span>
+                  </div>
+                ))}
+              </div>
+            </div>
 
-          {/* ── CARTE GOOGLE MAPS — desktop uniquement ─────────── */}
-          <div className="hidden lg:block w-80 xl:w-96 shrink-0 sticky top-20">
-            <div className="bg-white rounded-3xl border border-gray-100 shadow-sm overflow-hidden">
-              {/* Header carte */}
-              <div className="px-4 py-3 border-b border-gray-100 flex items-center justify-between">
-                <div className="flex items-center gap-2">
-                  <MapPin className="h-4 w-4 text-orange-500" />
-                  <span className="text-sm font-bold text-gray-900">Carte de la zone</span>
-                </div>
+            {/* Carte */}
+            <div className="bg-white rounded-2xl border border-gray-100 shadow-sm overflow-hidden">
+              <div className="flex items-center justify-between px-4 py-3 border-b border-gray-100">
+                <span className="text-sm font-bold text-gray-900 flex items-center gap-2"><MapPin className="h-4 w-4 text-orange-500"/>Carte zone</span>
                 <span className="text-xs text-green-500 font-semibold flex items-center gap-1">
-                  <span className="w-1.5 h-1.5 bg-green-500 rounded-full animate-pulse" />
-                  En direct
+                  <span className="w-1.5 h-1.5 bg-green-500 rounded-full animate-pulse"/>En direct
                 </span>
               </div>
-
-              {/* Map iframe Google Maps */}
-              <div className="h-72">
+              <div className="h-64">
                 <iframe
                   src="https://www.google.com/maps/embed?pb=!1m14!1m12!1m3!1d22400!2d-73.7124!3d45.5631!2m3!1f0!2f0!3f0!3m2!1i1024!2i768!4f13.1!5e0!3m2!1sfr!2sca!4v1"
                   width="100%" height="100%"
-                  style={{ border: 0 }}
-                  allowFullScreen loading="lazy"
-                  referrerPolicy="no-referrer-when-downgrade"
-                />
-              </div>
-
-              {/* Légende */}
-              <div className="px-4 py-3 bg-gray-50 border-t border-gray-100">
-                <div className="flex items-center justify-between text-xs text-gray-500">
-                  <div className="flex items-center gap-1.5">
-                    <span className="text-base">🏪</span>
-                    <span>{filteredStores.filter(s => s.isOpen).length} commerce{filteredStores.filter(s => s.isOpen).length > 1 ? "s" : ""} ouvert{filteredStores.filter(s => s.isOpen).length > 1 ? "s" : ""}</span>
-                  </div>
-                  <div className="flex items-center gap-1.5">
-                    <span className="text-base">🚗</span>
-                    <span>Chauffeurs actifs</span>
-                  </div>
-                </div>
+                  style={{border:0}} allowFullScreen loading="lazy"
+                  referrerPolicy="no-referrer-when-downgrade"/>
               </div>
             </div>
 
-            {/* Zone info card */}
-            <div className="mt-4 bg-white rounded-3xl border border-gray-100 shadow-sm p-4">
-              <h3 className="text-sm font-bold text-gray-900 mb-3 flex items-center gap-2">
-                <MapPin className="h-4 w-4 text-orange-500" />
-                Votre zone de livraison
-              </h3>
-              <div className="space-y-2">
-                <div className="flex justify-between text-xs">
-                  <span className="text-gray-500">Zone</span>
-                  <span className="font-semibold text-gray-900">{zone}</span>
-                </div>
-                <div className="flex justify-between text-xs">
-                  <span className="text-gray-500">Délai estimé</span>
-                  <span className="font-semibold text-orange-500">25–35 min</span>
-                </div>
-                <div className="flex justify-between text-xs">
-                  <span className="text-gray-500">Commerces actifs</span>
-                  <span className="font-semibold text-gray-900">{filteredStores.length}</span>
-                </div>
-                <div className="flex justify-between text-xs">
-                  <span className="text-gray-500">Zones voisines</span>
-                  <span className="font-semibold text-blue-500">{getNeighborZones(currentZone?.id || "").length} zones</span>
-                </div>
-              </div>
+            {/* Promo */}
+            <div className="rounded-2xl p-4 text-center" style={{background:"linear-gradient(135deg,#f0fdf4,#dcfce7)"}}>
+              <Leaf className="h-8 w-8 text-green-500 mx-auto mb-2"/>
+              <p className="text-sm font-bold text-green-800">{bio.length} produits biologiques</p>
+              <p className="text-xs text-green-600 mt-1">Disponibles dès maintenant</p>
+              <button onClick={()=>setActiveCat("bio")}
+                className="mt-3 text-xs font-bold text-green-700 bg-white border border-green-200 px-3 py-1.5 rounded-xl hover:bg-green-50 transition-colors">
+                Voir les produits bio
+              </button>
             </div>
-          </div>
-
-        </div>{/* fin flex principal */}
-
-        {/* Carte mobile — en bas de page */}
-        <div className="lg:hidden mt-8 bg-white rounded-3xl border border-gray-100 shadow-sm overflow-hidden">
-          <div className="px-4 py-3 border-b border-gray-100 flex items-center justify-between">
-            <div className="flex items-center gap-2">
-              <MapPin className="h-4 w-4 text-orange-500" />
-              <span className="text-sm font-bold text-gray-900">Carte de la zone</span>
-            </div>
-            <span className="text-xs text-green-500 font-semibold flex items-center gap-1">
-              <span className="w-1.5 h-1.5 bg-green-500 rounded-full animate-pulse" />
-              En direct
-            </span>
-          </div>
-          <div className="h-56">
-            <iframe
-              src="https://www.google.com/maps/embed?pb=!1m14!1m12!1m3!1d22400!2d-73.7124!3d45.5631!2m3!1f0!2f0!3f0!3m2!1i1024!2i768!4f13.1!5e0!3m2!1sfr!2sca!4v1"
-              width="100%" height="100%"
-              style={{ border: 0 }}
-              allowFullScreen loading="lazy"
-              referrerPolicy="no-referrer-when-downgrade"
-            />
           </div>
         </div>
+      </div>
 
+      {/* ── BOTTOM NAV MOBILE ── */}
+      <div className="fixed bottom-0 left-0 right-0 bg-white border-t border-gray-200 md:hidden z-40">
+        <div className="flex items-center justify-around py-2">
+          {[
+            {href:"/client",icon:"🏠",label:"Accueil"},
+            {href:"/client/orders",icon:"📋",label:"Commandes"},
+            {href:"/client/cart",icon:"🛒",label:"Panier"},
+            {href:user?"/client/profile":"/client/login",icon:user?"👤":"🔐",label:user?"Profil":"Connexion"},
+          ].map(item=>(
+            <Link key={item.href} href={item.href}
+              className="flex flex-col items-center gap-0.5 px-3 py-1">
+              <span className="text-xl leading-none">{item.icon}</span>
+              <span className="text-[10px] text-gray-500 font-medium">{item.label}</span>
+            </Link>
+          ))}
+        </div>
       </div>
     </div>
   );
 }
 
-function StoreCard({ store, nearby }: { store: StoreData; nearby?: boolean }) {
+// ── Carte produit horizontale (scroll) ──────────────────────────────────────
+function ProductCard({product:p}:{product:Product}) {
   return (
-    <Link href={`/client/store/${store.id}`}
-      className="bg-white rounded-2xl border border-gray-100 shadow-sm hover:shadow-md hover:border-orange-200 transition-all group overflow-hidden">
-      {/* Image header */}
-      <div className="h-24 bg-gradient-to-br from-orange-50 to-amber-50 flex items-center justify-center relative">
-        {store.imageUrl
-          ? <img src={store.imageUrl} alt={store.name} className="w-full h-full object-cover" /> // eslint-disable-line
-          : <div className="text-4xl">🏪</div>}
-        {/* Status badge */}
-        <div className={`absolute top-2 right-2 flex items-center gap-1 px-2 py-0.5 rounded-full text-xs font-semibold ${
-          store.isOpen ? "bg-green-500 text-white" : "bg-gray-200 text-gray-600"
-        }`}>
-          <span className={`w-1.5 h-1.5 rounded-full ${store.isOpen ? "bg-white" : "bg-gray-400"}`} />
-          {store.isOpen ? "Ouvert" : "Fermé"}
-        </div>
-        {nearby && (
-          <div className="absolute top-2 left-2 bg-blue-500 text-white text-[10px] font-bold px-2 py-0.5 rounded-full">
-            Zone voisine
+    <Link href={`/client/store/${p.storeId}`}
+      className="shrink-0 w-36 bg-white rounded-2xl border border-gray-100 shadow-sm hover:shadow-md hover:border-orange-200 transition-all overflow-hidden group">
+      <div className="w-full h-28 bg-gray-50 relative overflow-hidden">
+        {p.imageUrl
+          ? <img src={p.imageUrl} alt={p.name} className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-300"/>
+          : <Package className="h-8 w-8 text-gray-200 absolute inset-0 m-auto"/>}
+        {p.isOrganic && (
+          <div className="absolute top-1.5 left-1.5 bg-green-500 text-white text-[9px] font-bold px-1.5 py-0.5 rounded-full flex items-center gap-0.5">
+            <Leaf className="h-2.5 w-2.5"/>Bio
           </div>
         )}
+        {p.isFrozen && (
+          <div className="absolute top-1.5 right-1.5 bg-blue-500 text-white text-[9px] font-bold px-1.5 py-0.5 rounded-full">❄️</div>
+        )}
       </div>
+      <div className="p-2.5">
+        <p className="text-xs font-bold text-gray-900 line-clamp-2 leading-tight">{p.name}</p>
+        <p className="text-[10px] text-gray-400 truncate mt-0.5">{p.storeName}</p>
+        <p className="text-xs font-extrabold text-orange-500 mt-1.5">{p.price?.toFixed(2)} $</p>
+      </div>
+    </Link>
+  );
+}
 
-      {/* Content */}
-      <div className="p-4">
+// ── Carte produit grille (vue catégorie) ────────────────────────────────────
+function ProductCardGrid({product:p}:{product:Product}) {
+  return (
+    <Link href={`/client/store/${p.storeId}`}
+      className="bg-white rounded-2xl border border-gray-100 shadow-sm hover:shadow-md hover:border-orange-200 transition-all overflow-hidden group">
+      <div className="w-full aspect-square bg-gray-50 relative overflow-hidden">
+        {p.imageUrl
+          ? <img src={p.imageUrl} alt={p.name} className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-300"/>
+          : <Package className="h-8 w-8 text-gray-200 absolute inset-0 m-auto"/>}
+        {p.isOrganic && (
+          <div className="absolute top-2 left-2 bg-green-500 text-white text-[9px] font-bold px-1.5 py-0.5 rounded-full">🌿 Bio</div>
+        )}
+        {p.isFrozen && (
+          <div className="absolute top-2 right-2 bg-blue-500 text-white text-[9px] font-bold px-1.5 py-0.5 rounded-full">❄️</div>
+        )}
+      </div>
+      <div className="p-3">
+        <p className="text-xs font-bold text-gray-900 line-clamp-2 leading-tight">{p.name}</p>
+        <p className="text-[10px] text-gray-400 truncate mt-0.5">{p.storeName}</p>
+        <div className="flex items-center justify-between mt-2">
+          <p className="text-sm font-extrabold text-orange-500">{p.price?.toFixed(2)} $</p>
+          <div className="w-7 h-7 bg-orange-500 rounded-lg flex items-center justify-center">
+            <span className="text-white text-xs font-bold">+</span>
+          </div>
+        </div>
+      </div>
+    </Link>
+  );
+}
+
+// ── Carte store ─────────────────────────────────────────────────────────────
+function StoreCard({store,nearby}:{store:StoreData;nearby?:boolean}) {
+  return (
+    <Link href={`/client/store/${store.id}`}
+      className="shrink-0 w-64 md:w-auto bg-white rounded-2xl border border-gray-100 shadow-sm hover:shadow-md hover:border-orange-200 transition-all group overflow-hidden">
+      <div className="h-24 relative overflow-hidden" style={{background:"linear-gradient(135deg,#fff7ed,#fef3c7)"}}>
+        {store.imageUrl
+          ? <img src={store.imageUrl} alt={store.name} className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-300"/>
+          : <div className="absolute inset-0 flex items-center justify-center text-4xl">🏪</div>}
+        <div className={`absolute top-2 right-2 flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-bold ${
+          store.isOpen?"bg-green-500 text-white":"bg-gray-200 text-gray-600"
+        }`}>
+          <span className={`w-1.5 h-1.5 rounded-full ${store.isOpen?"bg-white":"bg-gray-400"}`}/>
+          {store.isOpen?"Ouvert":"Fermé"}
+        </div>
+        {nearby && <div className="absolute top-2 left-2 bg-blue-500 text-white text-[10px] font-bold px-2 py-0.5 rounded-full">Zone voisine</div>}
+      </div>
+      <div className="p-3.5">
         <div className="flex items-start justify-between gap-2">
           <div className="min-w-0">
-            <p className="font-bold text-gray-900 text-sm truncate group-hover:text-orange-600 transition-colors">
-              {store.name}
-            </p>
-            {store.commerceTypeName && (
-              <p className="text-xs text-gray-500 truncate">{store.commerceTypeName}</p>
-            )}
+            <p className="font-bold text-gray-900 text-sm truncate group-hover:text-orange-600 transition-colors">{store.name}</p>
+            {store.commerceTypeName && <p className="text-xs text-gray-400 truncate">{store.commerceTypeName}</p>}
           </div>
-          {store.rating && store.rating > 0 && (
-            <div className="flex items-center gap-1 shrink-0">
-              <Star className="h-3 w-3 text-yellow-400 fill-yellow-400" />
+          {store.rating&&store.rating>0&&(
+            <div className="flex items-center gap-0.5 shrink-0">
+              <Star className="h-3 w-3 text-yellow-400 fill-yellow-400"/>
               <span className="text-xs font-bold text-gray-700">{store.rating.toFixed(1)}</span>
             </div>
           )}
         </div>
-        <div className="flex items-center gap-3 mt-2 text-xs text-gray-500">
-          <span className="flex items-center gap-1">
-            <Clock className="h-3 w-3" />
-            {store.deliveryTime || 30} min
-          </span>
-          {store.address && (
-            <span className="flex items-center gap-1 truncate">
-              <MapPin className="h-3 w-3 shrink-0" />
-              <span className="truncate">{store.address}</span>
-            </span>
-          )}
+        <div className="flex items-center gap-3 mt-2 text-xs text-gray-400">
+          <span className="flex items-center gap-1"><Clock className="h-3 w-3"/>{store.deliveryTime||30} min</span>
+          {store.address&&<span className="truncate flex items-center gap-1"><MapPin className="h-3 w-3 shrink-0"/><span className="truncate">{store.address}</span></span>}
         </div>
       </div>
     </Link>
