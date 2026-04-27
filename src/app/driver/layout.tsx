@@ -27,18 +27,22 @@ export default function DriverLayout({ children }: { children: React.ReactNode }
     const unsub = onAuthStateChanged(auth, async (u) => {
       if (!u) { router.push("/driver/login"); return; }
       try {
-        const d = await getDoc(doc(db, "app_users", u.uid));
-        if (!d.exists() || !["driver","super_admin"].includes(d.data().role || "")) {
+        // Appels Firestore en parallele — 2x plus rapide
+        const [userDoc, profileDoc] = await Promise.all([
+          getDoc(doc(db, "app_users", u.uid)),
+          getDoc(doc(db, "driver_profiles", u.uid)),
+        ]);
+        if (!userDoc.exists() || !["driver","super_admin"].includes(userDoc.data().role || "")) {
           router.push("/driver/login"); return;
         }
-        setDriverName(d.data().display_name || u.displayName || "Chauffeur");
-        // Rediriger vers onboarding si pas complété
-        const profileDoc = await getDoc(doc(db, "driver_profiles", u.uid));
+        setDriverName(userDoc.data().display_name || u.displayName || "Chauffeur");
         const profileData = profileDoc.exists() ? profileDoc.data() : {};
         const onboardingDone = profileData.onboarding_completed || profileData.wizard_completed;
         const currentPath = window.location.pathname;
-        const isOnboarding = currentPath.includes("/onboarding");
-        if (!onboardingDone && !isOnboarding) {
+        // Pages accessibles meme sans onboarding complete
+        const exemptPaths = ["/driver/onboarding", "/driver/documents", "/driver/profile"];
+        const isExempt = exemptPaths.some(p => currentPath.startsWith(p));
+        if (!onboardingDone && !isExempt) {
           router.push("/driver/onboarding");
           return;
         }

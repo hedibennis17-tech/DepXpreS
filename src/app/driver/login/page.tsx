@@ -35,26 +35,10 @@ export default function DriverLoginPage() {
 
     setLoading(true)
     try {
-      const userCredential = await signInWithEmailAndPassword(auth, email, password)
-      const idToken = await userCredential.user.getIdToken()
-
-      const res = await fetch("/api/auth/login", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ idToken }),
-      })
-
-      const data = await res.json()
-      if (!res.ok) {
-        setError(data.error || "Erreur de connexion.")
-        return
-      }
-
-      if (data.role === "driver") {
-        router.push("/driver/dashboard")
-      } else {
-        setError("Ce compte n'est pas un compte chauffeur.")
-      }
+      // Auth Firebase directement — pas d'appel API intermédiaire (plus rapide)
+      await signInWithEmailAndPassword(auth, email, password)
+      // Le layout /driver va vérifier le rôle et rediriger si besoin
+      router.push("/driver/dashboard")
     } catch (err: any) {
       if (
         err.code === "auth/user-not-found" ||
