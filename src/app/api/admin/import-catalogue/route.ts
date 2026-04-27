@@ -16,20 +16,20 @@ export async function POST(req: NextRequest) {
       return NextResponse.json({ error: "Store introuvable" }, { status: 404 });
     }
 
-    // Vérifier si catégorie existe, sinon la créer
+    // Déterminer la catégorie selon le type de catalogue
+    const { catalogueType } = body;
+    const catConfig = catalogueType === "fruits"
+      ? { name: "Fruits & Légumes", slug: "fruits-legumes", emoji: "🥦", order: 1 }
+      : { name: "Pharmacie / Santé", slug: "pharmacie-sante", emoji: "💊", order: 0 };
+
     const catSnap = await adminDb.collection("categories")
       .where("storeId", "==", storeId)
-      .where("name", "==", "Pharmacie / Santé").get();
+      .where("name", "==", catConfig.name).get();
 
     let categoryId: string;
     if (catSnap.empty) {
       const catRef = await adminDb.collection("categories").add({
-        name: "Pharmacie / Santé",
-        slug: "pharmacie-sante",
-        storeId,
-        emoji: "💊",
-        order: 0,
-        createdAt: FieldValue.serverTimestamp(),
+        ...catConfig, storeId, createdAt: FieldValue.serverTimestamp(),
       });
       categoryId = catRef.id;
     } else {
@@ -79,14 +79,16 @@ export async function POST(req: NextRequest) {
         batch.set(docRef, {
           storeId,
           categoryId,
-          categoryName: "Pharmacie / Santé",
+          categoryName: catConfig.name,
           subcategoryId: subCatIds[p.subcategory] || "",
           subcategoryName: p.subcategory,
           sku: p.sku,
-          name: p.name,
+          name: p.name || p.name_fr || "",
           brand: p.brand || "",
           description: p.activeIngredient ? `Ingrédient actif: ${p.activeIngredient}` : "",
-          price: p.priceEstimateCAD || 0,
+          price: typeof p.priceEstimateCAD === "object"
+              ? Math.round(((p.priceEstimateCAD.min||0)+(p.priceEstimateCAD.max||0))/2*100)/100
+              : (p.price || p.priceEstimateCAD || 0),
           imageUrl: p.imageUrl || "",
           inStock: true,
           stock: 50, // stock par défaut
@@ -96,6 +98,9 @@ export async function POST(req: NextRequest) {
           deliveryAllowed: p.deliveryAllowed !== false,
           warnings: p.warnings || [],
           type: p.type || "OTC_OR_HEALTHCARE",
+          isOrganic: p.isOrganic || false,
+          isLocal: p.isLocal || false,
+          unit: p.unit || "unité",
           createdAt: FieldValue.serverTimestamp(),
           updatedAt: FieldValue.serverTimestamp(),
         });
