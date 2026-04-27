@@ -42,71 +42,48 @@ const CATEGORIES = [
   { key:"vitamines",    emoji:"💪", label:"Vitamines"        },
 ];
 
-// Matching STRICT par champs exacts des catalogues
+// Matching par department/categoryName/subcategoryName exacts (lowercase)
 function matchCat(p: Product, key: string): boolean {
   if (key === "all") return true;
-  const dept = (p.department||"").toLowerCase();
-  const cat  = (p.categoryName||"").toLowerCase();
-  const sub  = (p.subcategoryName||"").toLowerCase();
-  const sec  = (p.section||"").toLowerCase();
+  const dept = (p.department||"").toLowerCase().trim();
+  const cat  = (p.categoryName||"").toLowerCase().trim();
+  const sub  = (p.subcategoryName||"").toLowerCase().trim();
 
-  switch(key) {
-    case "bio":
-      return !!p.isOrganic;
+  if (key === "bio")     return !!p.isOrganic;
+  if (key === "congeles")return dept === "aliments congelés" || !!p.isFrozen;
 
-    case "congeles":
-      return dept === "aliments congelés" || !!p.isFrozen;
+  if (key === "fruits")
+    return dept.includes("fruits et légumes") || cat === "fruits & légumes";
 
-    case "fruits":
-      // Catalogue fruits-legumes : department = "Épicerie / Fruits et légumes"
-      // Alimentation : section = "Fruits et légumes", sous-cat = "Fruits frais","Légumes frais","Herbes fraîches"
-      return dept.includes("fruits et légumes") ||
-             cat === "fruits & légumes" ||
-             ["fruits frais","légumes frais","herbes fraîches","fruits surgelés","légumes surgelés"].includes(sub) ||
-             sec === "fruits et légumes";
+  if (key === "viandes")
+    return ["bœuf","poulet","dinde","porc","poissons","fruits de mer","charcuterie","substituts de viande"].includes(sub);
 
-    case "viandes":
-      // Alimentation : département "Produits frais", sous-cat viandes/poissons
-      return ["bœuf","poulet","dinde","porc","poissons","fruits de mer","charcuterie","substituts de viande"].includes(sub);
+  if (key === "boissons")
+    return dept === "boissons" ||
+           ["boissons gazeuses","eau","jus","énergie et sport"].includes(sub);
 
-    case "boissons":
-      // Département exact "Boissons", sous-cat: boissons gazeuses, eau, jus, énergie
-      return dept === "boissons" ||
-             ["boissons gazeuses","eau","jus","énergie et sport","boissons végétales","café, thé et boissons chaudes"].includes(sub);
+  if (key === "laitiers")
+    return dept === "produits laitiers et œufs";
 
-    case "laitiers":
-      return dept === "produits laitiers et œufs" ||
-             ["fromages","fromages fins","lait","yogourts","crèmes et beurre","œufs"].includes(sub);
+  if (key === "snacks")
+    return ["croustilles et craquelins","bonbons et chocolat","barres et noix"].includes(sub);
 
-    case "snacks":
-      return ["croustilles et craquelins","bonbons et chocolat","barres et noix"].includes(sub);
+  if (key === "boulangerie")
+    return ["pains","déjeuner boulangerie"].includes(sub);
 
-    case "boulangerie":
-      return ["pains","déjeuner boulangerie","déjeuners et desserts"].includes(sub);
+  if (key === "bebe")
+    return dept === "bébé et besoins spéciaux" || sub === "bébé et enfant";
 
-    case "bebe":
-      return dept === "bébé et besoins spéciaux" ||
-             ["purées et céréales","formules","sans gluten et santé","international","bébé et enfant"].includes(sub);
+  if (key === "pharma")
+    return cat === "pharmacie / santé" && sub !== "vitamines et produits naturels";
 
-    case "pharma":
-      return cat === "pharmacie / santé" ||
-             ["douleur et fièvre","rhume et grippe","allergies","digestion","premiers soins",
-              "peau et démangeaisons","soins buccaux","yeux et oreilles","sommeil et stress léger",
-              "hygiène et protection"].includes(sub);
+  if (key === "vitamines")
+    return sub === "vitamines et produits naturels";
 
-    case "vitamines":
-      return sub === "vitamines et produits naturels";
+  if (key === "epicerie")
+    return dept === "garde-manger";
 
-    case "epicerie":
-      // Garde-manger = épicerie sèche
-      return dept === "garde-manger" ||
-             ["pâtes","riz et grains","condiments","huiles et vinaigres","ingrédients cuisson",
-              "sauces pour pâtes","soupes et repas","légumes en conserve","poissons et viandes en conserve",
-              "tartinades","épices","céréales et gruau"].includes(sub);
-
-    default:
-      return false;
-  }
+  return false;
 }
 
 // Sections produits pour la home (même keys que matchCat)
