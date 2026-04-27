@@ -1,4 +1,5 @@
 "use client";
+import { useRouter } from "next/navigation";
 import { useState, useEffect } from "react";
 import { auth, db } from "@/lib/firebase";
 import { ACTIVE_ZONES, type DeliveryZone } from "@/lib/delivery-zones";
@@ -48,6 +49,7 @@ const STATUS_CONFIG = {
 };
 
 export default function DriverDashboard() {
+  const router = useRouter();
   const [driver, setDriver] = useState<DriverProfile | null>(null);
   const [loading, setLoading] = useState(true);
   const [activeOrder, setActiveOrder] = useState<ActiveOrder | null>(null);
@@ -353,9 +355,19 @@ export default function DriverDashboard() {
           </div>
 
           <div className="flex gap-2">
-            <button className="flex-1 bg-orange-500 hover:bg-orange-400 text-white font-bold py-3 rounded-2xl text-sm transition-colors flex items-center justify-center gap-2">
-              <CheckCircle2 className="h-4 w-4" /> Confirmer livraison
-            </button>
+            {activeOrder.status === "assigned" ? (
+              <button
+                onClick={() => router.push("/driver/orders")}
+                className="flex-1 bg-green-500 hover:bg-green-400 text-white font-bold py-3 rounded-2xl text-sm transition-colors flex items-center justify-center gap-2">
+                <CheckCircle2 className="h-4 w-4" /> Voir et accepter la commande
+              </button>
+            ) : (
+              <button
+                onClick={() => router.push("/driver/orders")}
+                className="flex-1 bg-orange-500 hover:bg-orange-400 text-white font-bold py-3 rounded-2xl text-sm transition-colors flex items-center justify-center gap-2">
+                <Navigation className="h-4 w-4" /> Gérer la livraison
+              </button>
+            )}
           </div>
         </div>
       ) : (
