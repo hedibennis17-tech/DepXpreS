@@ -17,22 +17,24 @@ export async function GET(req: NextRequest) {
   const FROM  = process.env.TWILIO_FROM;
 
   if (SID && TOKEN && FROM) {
+    // Test SMS vers le numéro admin (hedibennis17 phone)
+    const testTo = "+15142450229"; // numéro admin pour test
     const r = await fetch(`https://api.twilio.com/2010-04-01/Accounts/${SID}/Messages.json`, {
       method:"POST",
       headers:{
         "Authorization":"Basic "+Buffer.from(`${SID}:${TOKEN}`).toString("base64"),
         "Content-Type":"application/x-www-form-urlencoded",
       },
-      body: new URLSearchParams({From:FROM, To:FROM, Body:"FastDép TEST OK"})
+      body: new URLSearchParams({From:FROM, To:testTo, Body:"FastDép TEST ✅ — SMS fonctionne!"})
     });
     const d = await r.json();
-    results.twilio = {status:r.status, sid:d.sid, error:d.message, code:d.code};
+    results.twilio = {status:r.status, sid:d.sid, error:d.message, code:d.code, to:testTo};
   } else {
     results.twilio = "❌ variables manquantes";
   }
 
   const SGKEY = process.env.SENDGRID_API_KEY;
-  const EMAIL = process.env.FROM_EMAIL;
+  const EMAIL = process.env.FROM_EMAIL; // maintenant vérifié sur SendGrid
   if (SGKEY && EMAIL) {
     const r = await fetch("https://api.sendgrid.com/v3/mail/send",{
       method:"POST",
