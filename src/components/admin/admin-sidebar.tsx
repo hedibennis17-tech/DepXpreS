@@ -108,6 +108,7 @@ const menuItems = [
         { label: "Actifs", href: "/admin/stores/active" },
         { label: "Horaires", href: "/admin/stores/schedules" },
         { label: "Catalogue global", href: "/admin/stores/catalog" },
+        { label: "📦 Import Catalogue", href: "/admin/catalogue/import" },
         { label: "Stock & visibilité", href: "/admin/stores/stock" },
         { label: "Tarification", href: "/admin/stores/pricing" },
         { label: "Performance", href: "/admin/stores/performance" },
