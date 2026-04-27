@@ -20,6 +20,7 @@ import {
   Package, Users, DollarSign, Calendar, AlertCircle,
   Bell, MessageCircle, Send, Loader2
 } from "lucide-react";
+import StorePaymentTab from "@/components/admin/stores/StorePaymentTab";
 
 // ─── Types ───────────────────────────────────────────────────────────────────
 
@@ -371,13 +372,14 @@ export default function StoreDetailPage() {
 
       {/* Onglets */}
       <Tabs defaultValue="info" className="space-y-4">
-        <TabsList className="grid grid-cols-6 w-full">
-          <TabsTrigger value="info">Infos</TabsTrigger>
-          <TabsTrigger value="hours">Horaires</TabsTrigger>
-          <TabsTrigger value="settings">Paramètres</TabsTrigger>
-          <TabsTrigger value="orders">Commandes</TabsTrigger>
-          <TabsTrigger value="notification">🔔 Notifier</TabsTrigger>
-          <TabsTrigger value="messages" onClick={loadMessages}>💬 Messages</TabsTrigger>
+        <TabsList className="flex overflow-x-auto gap-1 w-full flex-nowrap pb-1">
+          <TabsTrigger value="info" className="shrink-0">Infos</TabsTrigger>
+          <TabsTrigger value="hours" className="shrink-0">Horaires</TabsTrigger>
+          <TabsTrigger value="settings" className="shrink-0">Paramètres</TabsTrigger>
+          <TabsTrigger value="orders" className="shrink-0">Commandes</TabsTrigger>
+          <TabsTrigger value="payment" className="shrink-0">💳 Paiement</TabsTrigger>
+          <TabsTrigger value="notification" className="shrink-0">🔔 Notifier</TabsTrigger>
+          <TabsTrigger value="messages" className="shrink-0" onClick={loadMessages}>💬 Messages</TabsTrigger>
         </TabsList>
 
         {/* ─── Onglet Informations ─────────────────────────────────────────── */}
@@ -805,6 +807,11 @@ export default function StoreDetailPage() {
               </div>
             </div>
           </div>
+        </TabsContent>
+
+        {/* ─── Onglet Paiement Store ───────────────────────────────────────── */}
+        <TabsContent value="payment">
+          <StorePaymentTab storeId={store.id} storeName={store.name} />
         </TabsContent>
 
       </Tabs>
