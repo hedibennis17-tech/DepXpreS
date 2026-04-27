@@ -77,11 +77,10 @@ export default function StoreOrdersPage() {
   useEffect(() => {
     if (!storeId) return;
 
+    // Query simple sans orderBy pour éviter l'index composite Firestore
     const q = query(
       collection(db, "orders"),
-      where("storeId", "==", storeId),
-      orderBy("createdAt", "desc"),
-      limit(100)
+      where("storeId", "==", storeId)
     );
 
     const unsub = onSnapshot(q, (snap) => {
@@ -90,7 +89,9 @@ export default function StoreOrdersPage() {
         ...d.data(),
         createdAt: d.data().createdAt?.toDate?.()?.toISOString() || d.data().createdAt,
       })) as Order[];
-      setOrders(data);
+      // Trier côté client par date décroissante
+      data.sort((a,b) => new Date(b.createdAt||0).getTime() - new Date(a.createdAt||0).getTime());
+      setOrders(data.slice(0,100));
       setLoading(false);
     }, (err) => {
       console.error(err);

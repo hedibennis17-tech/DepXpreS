@@ -29,6 +29,7 @@ export default function DriverOrders() {
   const router = useRouter();
   const [orders, setOrders] = useState<Order[]>([]);
   const [uid, setUid] = useState("");
+  const uidRef = useRef("");
   const [loading, setLoading] = useState(true);
   const [acting, setActing] = useState<string|null>(null);
   // Modales
@@ -48,12 +49,18 @@ export default function DriverOrders() {
     const unsub = onAuthStateChanged(auth, u=>{
       if(!u){setLoading(false);return;}
       setUid(u.uid);
-      const q = query(collection(db,"orders"),
-        where("driverId","==",u.uid),
-        where("status","in",["assigned","navigating_pickup","arrived_store","picked_up","navigating_dropoff","arrived_client","delivered"])
+      uidRef.current = u.uid;
+      // Query simple sur driverId uniquement (pas besoin d'index composite)
+      const q = query(
+        collection(db,"orders"),
+        where("driverId","==",u.uid)
       );
       const unsubO = onSnapshot(q, snap=>{
-        setOrders(snap.docs.map(d=>({id:d.id,...d.data()} as Order)));
+        const activeStatuses = ["assigned","navigating_pickup","arrived_store","picked_up","navigating_dropoff","arrived_client","delivered"];
+        setOrders(snap.docs
+          .map(d=>({id:d.id,...d.data()} as Order))
+          .filter(o => activeStatuses.includes(o.status))
+        );
         setLoading(false);
       });
       return ()=>unsubO();
@@ -65,13 +72,19 @@ export default function DriverOrders() {
   async function doAction(orderId:string, action:string, extra:Record<string,any>={}) {
     setActing(orderId+action);
     try {
+      const dId = uidRef.current || uid;
+      if(!dId){ console.error("uid pas chargé"); return; }
       const res = await fetch("/api/driver/order-action",{
         method:"POST",
         headers:{"Content-Type":"application/json"},
-        body: JSON.stringify({orderId, driverId:uid, action, ...extra}),
+        body: JSON.stringify({orderId, driverId:dId, action, ...extra}),
       });
-      const data = await res.json();
-      if(!data.ok) console.error("Action error:", data.error);
+      const text = await res.text();
+      console.log("order-action response:", res.status, text);
+      try {
+        const data = JSON.parse(text);
+        if(!data.ok) console.error("Action error:", data.error);
+      } catch(e){ console.error("Parse error:", e, text); }
     } catch(e){ console.error(e); }
     finally { setActing(null); }
   }
