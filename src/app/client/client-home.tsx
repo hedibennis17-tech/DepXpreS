@@ -208,16 +208,51 @@ export default function ClientHome() {
             </div>
           )}
 
-          {/* Titre */}
-          <div className="mb-6">
-            <p className="text-orange-400 text-xs font-bold tracking-widest uppercase mb-2">Livraison express 30 min</p>
-            <h1 className="text-3xl sm:text-4xl md:text-5xl font-extrabold text-white leading-tight mb-1">
-              Livré chez vous,<br/>
-              <span style={{background:"linear-gradient(135deg,#f97316,#fbbf24)",WebkitBackgroundClip:"text",WebkitTextFillColor:"transparent",backgroundClip:"text"}}>
-                en un clic
-              </span>
-            </h1>
-            <p className="text-gray-400 text-sm">{stores.length} commerce{stores.length!==1?"s":""} ouverts · {products.length} articles disponibles</p>
+          {/* Hero: titre + carte côte à côte sur desktop, empilés sur mobile */}
+          <div className="flex flex-col lg:flex-row lg:items-stretch lg:gap-6 mb-6">
+            {/* Texte */}
+            <div className="flex-1 mb-4 lg:mb-0">
+              <p className="text-orange-400 text-[10px] font-bold tracking-widest uppercase mb-2">⚡ Livraison express 30 min</p>
+              <h1 className="text-2xl sm:text-3xl font-extrabold text-white leading-tight mb-1.5">
+                Livré chez vous,{" "}
+                <span style={{background:"linear-gradient(135deg,#f97316,#fbbf24)",WebkitBackgroundClip:"text",WebkitTextFillColor:"transparent",backgroundClip:"text"}}>
+                  en un clic
+                </span>
+              </h1>
+              <p className="text-gray-400 text-xs mb-4">{stores.length} commerce{stores.length!==1?"s":""} ouverts · {products.length} articles disponibles</p>
+              {/* Stats mini */}
+              <div className="flex flex-wrap gap-2">
+                {[
+                  {e:"⚡",l:"30 min"},
+                  {e:"🌿",l:`${bio.length} bio`},
+                  {e:"🛒",l:`${products.length} articles`},
+                ].map(b=>(
+                  <div key={b.l} className="flex items-center gap-1 bg-white/8 border border-white/10 rounded-full px-2.5 py-1">
+                    <span className="text-[10px]">{b.e}</span>
+                    <span className="text-[10px] text-gray-300 font-medium">{b.l}</span>
+                  </div>
+                ))}
+              </div>
+            </div>
+
+            {/* Carte Google Maps intégrée dans le hero */}
+            <div className="lg:w-80 xl:w-96 rounded-2xl overflow-hidden border border-white/10 shrink-0" style={{height:"160px"}}>
+              <div className="relative h-full">
+                <iframe
+                  src="https://www.google.com/maps/embed?pb=!1m14!1m12!1m3!1d22400!2d-73.7124!3d45.5631!2m3!1f0!2f0!3f0!3m2!1i1024!2i768!4f13.1!5e0!3m2!1sfr!2sca!4v1"
+                  width="100%" height="100%"
+                  style={{border:0,filter:"invert(90%) hue-rotate(180deg) brightness(0.85)"}}
+                  allowFullScreen loading="lazy"
+                  referrerPolicy="no-referrer-when-downgrade"/>
+                {/* Overlay label */}
+                <div className="absolute bottom-0 left-0 right-0 bg-gradient-to-t from-black/60 to-transparent px-3 py-2 pointer-events-none">
+                  <p className="text-white text-[10px] font-bold flex items-center gap-1">
+                    <span className="w-1.5 h-1.5 bg-green-400 rounded-full animate-pulse"/>
+                    {stores.filter(s=>s.isOpen).length} commerces ouverts · {zone}
+                  </p>
+                </div>
+              </div>
+            </div>
           </div>
 
           {/* Barre de recherche */}
@@ -251,16 +286,14 @@ export default function ClientHome() {
           </div>
 
           {/* Badges stats */}
-          <div className="flex items-center gap-3 mt-4 flex-wrap">
+          <div className="flex items-center gap-2 mt-3 flex-wrap">
             {[
-              {icon:"⚡",label:"30 min"},
-              {icon:"🌿",label:`${bio.length} produits bio`},
               {icon:"❄️",label:`${frozen.length} surgelés`},
-              {icon:"🛒",label:`${products.length} articles`},
+              {icon:"👶",label:"Bébé & enfant"},
             ].map(b=>(
-              <div key={b.label} className="flex items-center gap-1.5 bg-white/8 border border-white/10 rounded-full px-3 py-1.5">
-                <span className="text-xs">{b.icon}</span>
-                <span className="text-xs text-gray-300 font-medium">{b.label}</span>
+              <div key={b.label} className="flex items-center gap-1.5 bg-white/8 border border-white/10 rounded-full px-2.5 py-1">
+                <span className="text-[10px]">{b.icon}</span>
+                <span className="text-[10px] text-gray-300 font-medium">{b.label}</span>
               </div>
             ))}
           </div>
