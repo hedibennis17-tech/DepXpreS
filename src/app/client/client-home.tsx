@@ -25,50 +25,104 @@ interface StoreData {
   deliveryTime?: number; minOrder?: number;
 }
 
-// Catégories alignées avec tous les catalogues
+// Catégories — matchs EXACTS sur les vrais champs Firestore/JSON
 const CATEGORIES = [
-  { key:"all",          emoji:"🏠", label:"Accueil",          match:[] },
-  { key:"alimentation", emoji:"🛒", label:"Épicerie",         match:["alimentation","produits frais","garde-manger","produits laitiers","conserves","condiments","pâtes","riz","grains","déjeuner","céréales","épicerie"] },
-  { key:"fruits",       emoji:"🥦", label:"Fruits & Légumes", match:["fruits","légumes","fruits et légumes","pommes","agrumes","baies","racines","herbes","tomates","laitues","crucifères","poivrons"] },
-  { key:"viandes",      emoji:"🥩", label:"Boucherie",        match:["viandes","poissons","charcuterie","fruits de mer","volailles","boucherie"] },
-  { key:"pharma",       emoji:"💊", label:"Pharmacie",        match:["pharmacie","santé","otc","douleur","rhume","allergies","digestion","premiers soins","soins buccaux","yeux","oreilles"] },
-  { key:"snacks",       emoji:"🍿", label:"Collations",       match:["collations","snacks","chips","chocolat","bonbons","biscuits","barres","munchies"] },
-  { key:"boissons",     emoji:"🧃", label:"Boissons",         match:["boissons","jus","eaux","eau","thé","café","lait","boissons énergétiques","sport","lait et boissons"] },
-  { key:"laitiers",     emoji:"🥛", label:"Laitiers & Œufs",  match:["laitiers","fromages","œufs","yogourt","crème","beurre","lait et boissons"] },
-  { key:"boulangerie",  emoji:"🍞", label:"Boulangerie",      match:["boulangerie","pain","viennoiserie","biscuits"] },
-  { key:"bebe",         emoji:"👶", label:"Bébé",             match:["bébé","enfant","bebe","aliments pour bébés","besoins spéciaux"] },
-  { key:"bio",          emoji:"🌿", label:"Bio",              match:["bio"] },
-  { key:"congeles",     emoji:"❄️", label:"Surgelés",         match:["congelés","surgelés","frozen","surgelés"] },
-  { key:"vitamines",    emoji:"💪", label:"Vitamines",        match:["vitamines","naturels","produits naturels","suppléments"] },
+  { key:"all",          emoji:"🏠", label:"Accueil"          },
+  { key:"epicerie",     emoji:"🛒", label:"Épicerie"         },
+  { key:"fruits",       emoji:"🥦", label:"Fruits & Légumes" },
+  { key:"viandes",      emoji:"🥩", label:"Boucherie"        },
+  { key:"pharma",       emoji:"💊", label:"Pharmacie"        },
+  { key:"snacks",       emoji:"🍿", label:"Collations"       },
+  { key:"boissons",     emoji:"🧃", label:"Boissons"         },
+  { key:"laitiers",     emoji:"🥛", label:"Laitiers & Œufs" },
+  { key:"boulangerie",  emoji:"🍞", label:"Boulangerie"      },
+  { key:"bebe",         emoji:"👶", label:"Bébé"             },
+  { key:"bio",          emoji:"🌿", label:"Bio"              },
+  { key:"congeles",     emoji:"❄️", label:"Surgelés"         },
+  { key:"vitamines",    emoji:"💪", label:"Vitamines"        },
 ];
 
+// Matching STRICT par champs exacts des catalogues
 function matchCat(p: Product, key: string): boolean {
   if (key === "all") return true;
-  if (key === "bio") return !!p.isOrganic;
-  if (key === "congeles") return !!p.isFrozen;
-  const cat = CATEGORIES.find(c=>c.key===key);
-  if (!cat) return false;
-  const fields = [
-    p.categoryName||"", p.subcategoryName||"",
-    p.department||"", p.section||""
-  ].map(f=>f.toLowerCase());
-  return cat.match.some(m => fields.some(f => f.includes(m.toLowerCase())));
+  const dept = (p.department||"").toLowerCase();
+  const cat  = (p.categoryName||"").toLowerCase();
+  const sub  = (p.subcategoryName||"").toLowerCase();
+  const sec  = (p.section||"").toLowerCase();
+
+  switch(key) {
+    case "bio":
+      return !!p.isOrganic;
+
+    case "congeles":
+      return dept === "aliments congelés" || !!p.isFrozen;
+
+    case "fruits":
+      // Catalogue fruits-legumes : department = "Épicerie / Fruits et légumes"
+      // Alimentation : section = "Fruits et légumes", sous-cat = "Fruits frais","Légumes frais","Herbes fraîches"
+      return dept.includes("fruits et légumes") ||
+             cat === "fruits & légumes" ||
+             ["fruits frais","légumes frais","herbes fraîches","fruits surgelés","légumes surgelés"].includes(sub) ||
+             sec === "fruits et légumes";
+
+    case "viandes":
+      // Alimentation : département "Produits frais", sous-cat viandes/poissons
+      return ["bœuf","poulet","dinde","porc","poissons","fruits de mer","charcuterie","substituts de viande"].includes(sub);
+
+    case "boissons":
+      // Département exact "Boissons", sous-cat: boissons gazeuses, eau, jus, énergie
+      return dept === "boissons" ||
+             ["boissons gazeuses","eau","jus","énergie et sport","boissons végétales","café, thé et boissons chaudes"].includes(sub);
+
+    case "laitiers":
+      return dept === "produits laitiers et œufs" ||
+             ["fromages","fromages fins","lait","yogourts","crèmes et beurre","œufs"].includes(sub);
+
+    case "snacks":
+      return ["croustilles et craquelins","bonbons et chocolat","barres et noix"].includes(sub);
+
+    case "boulangerie":
+      return ["pains","déjeuner boulangerie","déjeuners et desserts"].includes(sub);
+
+    case "bebe":
+      return dept === "bébé et besoins spéciaux" ||
+             ["purées et céréales","formules","sans gluten et santé","international","bébé et enfant"].includes(sub);
+
+    case "pharma":
+      return cat === "pharmacie / santé" ||
+             ["douleur et fièvre","rhume et grippe","allergies","digestion","premiers soins",
+              "peau et démangeaisons","soins buccaux","yeux et oreilles","sommeil et stress léger",
+              "hygiène et protection"].includes(sub);
+
+    case "vitamines":
+      return sub === "vitamines et produits naturels";
+
+    case "epicerie":
+      // Garde-manger = épicerie sèche
+      return dept === "garde-manger" ||
+             ["pâtes","riz et grains","condiments","huiles et vinaigres","ingrédients cuisson",
+              "sauces pour pâtes","soupes et repas","légumes en conserve","poissons et viandes en conserve",
+              "tartinades","épices","céréales et gruau"].includes(sub);
+
+    default:
+      return false;
+  }
 }
 
-// Sections produits pour la home
+// Sections produits pour la home (même keys que matchCat)
 const SECTIONS = [
-  { key:"alimentation", emoji:"🛒", label:"Épicerie & Garde-Manger",   color:"#f97316", bg:"#fff7ed" },
-  { key:"fruits",       emoji:"🥦", label:"Fruits & Légumes",           color:"#22c55e", bg:"#f0fdf4" },
-  { key:"viandes",      emoji:"🥩", label:"Boucherie & Poissons",       color:"#ef4444", bg:"#fef2f2" },
-  { key:"pharma",       emoji:"💊", label:"Pharmacie & Santé",          color:"#3b82f6", bg:"#eff6ff" },
-  { key:"boissons",     emoji:"🧃", label:"Boissons",                   color:"#8b5cf6", bg:"#f5f3ff" },
-  { key:"laitiers",     emoji:"🥛", label:"Produits Laitiers & Œufs",   color:"#0ea5e9", bg:"#f0f9ff" },
-  { key:"snacks",       emoji:"🍿", label:"Collations & Snacks",        color:"#f59e0b", bg:"#fffbeb" },
-  { key:"boulangerie",  emoji:"🍞", label:"Boulangerie",                color:"#d97706", bg:"#fefce8" },
-  { key:"bio",          emoji:"🌿", label:"Produits Bio 🌱",            color:"#10b981", bg:"#ecfdf5" },
-  { key:"congeles",     emoji:"❄️", label:"Surgelés",                   color:"#06b6d4", bg:"#ecfeff" },
-  { key:"bebe",         emoji:"👶", label:"Bébé & Enfant",              color:"#ec4899", bg:"#fdf2f8" },
-  { key:"vitamines",    emoji:"💪", label:"Vitamines & Produits Naturels", color:"#84cc16", bg:"#f7fee7" },
+  { key:"epicerie",     emoji:"🛒", label:"Épicerie & Garde-Manger",      color:"#f97316", bg:"#fff7ed" },
+  { key:"fruits",       emoji:"🥦", label:"Fruits & Légumes",              color:"#22c55e", bg:"#f0fdf4" },
+  { key:"viandes",      emoji:"🥩", label:"Boucherie & Poissons",          color:"#ef4444", bg:"#fef2f2" },
+  { key:"pharma",       emoji:"💊", label:"Pharmacie & Santé",             color:"#3b82f6", bg:"#eff6ff" },
+  { key:"boissons",     emoji:"🧃", label:"Boissons",                      color:"#8b5cf6", bg:"#f5f3ff" },
+  { key:"laitiers",     emoji:"🥛", label:"Produits Laitiers & Œufs",      color:"#0ea5e9", bg:"#f0f9ff" },
+  { key:"snacks",       emoji:"🍿", label:"Collations & Snacks",           color:"#f59e0b", bg:"#fffbeb" },
+  { key:"boulangerie",  emoji:"🍞", label:"Boulangerie",                   color:"#d97706", bg:"#fefce8" },
+  { key:"bio",          emoji:"🌿", label:"Produits Bio",                  color:"#10b981", bg:"#ecfdf5" },
+  { key:"congeles",     emoji:"❄️", label:"Surgelés",                      color:"#06b6d4", bg:"#ecfeff" },
+  { key:"bebe",         emoji:"👶", label:"Bébé & Enfant",                 color:"#ec4899", bg:"#fdf2f8" },
+  { key:"vitamines",    emoji:"💪", label:"Vitamines & Produits Naturels",  color:"#84cc16", bg:"#f7fee7" },
 ];
 
 export default function ClientHome() {
