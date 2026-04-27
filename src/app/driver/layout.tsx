@@ -23,7 +23,11 @@ export default function DriverLayout({ children }: { children: React.ReactNode }
   const [menuOpen, setMenuOpen] = useState(false);
   const [online, setOnline] = useState(false);
 
+  // Pages publiques — pas besoin d'auth
+  const isPublicPage = ["/driver/login", "/driver/signup"].some(p => pathname.startsWith(p));
+
   useEffect(() => {
+    if (isPublicPage) { setLoading(false); return; }
     const unsub = onAuthStateChanged(auth, async (u) => {
       if (!u) { router.push("/driver/login"); return; }
       try {
@@ -50,7 +54,10 @@ export default function DriverLayout({ children }: { children: React.ReactNode }
       finally { setLoading(false); }
     });
     return () => unsub();
-  }, [router]);
+  }, [router, isPublicPage]);
+
+  // Afficher login/signup directement sans header ni nav
+  if (isPublicPage) return <>{children}</>;
 
   if (loading) return (
     <div className="min-h-screen bg-[#0a0a0a] flex items-center justify-center">
@@ -58,7 +65,7 @@ export default function DriverLayout({ children }: { children: React.ReactNode }
         <div className="w-12 h-12 rounded-2xl bg-orange-500 flex items-center justify-center" style={{boxShadow:"0 0 30px rgba(249,115,22,0.5)"}}>
           <Zap className="h-6 w-6 text-white fill-white animate-pulse" />
         </div>
-        <p className="text-gray-500 text-sm">Connexion...</p>
+        <p className="text-gray-500 text-sm">Chargement...</p>
       </div>
     </div>
   );
