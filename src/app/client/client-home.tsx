@@ -160,47 +160,58 @@ export default function ClientHome() {
           } as Product;
         }).filter(p=>p.name&&p.price>0);
 
-        // Charger catalogues JSON publics (alimentation + fruits + pharmacie)
-        const catalogFiles = [
-          "/catalogue-alimentation.json",
-          "/catalogue-fruits-legumes.json",
-          "/catalogue-otc.json",
+        // Charger catalogues JSON — 1 fichier par catégorie (propre et précis)
+        const CATALOGUE_FILES = [
+          "/catalogue-epicerie.json",      // Épicerie Garde-manger 153 produits
+          "/catalogue-fruits-legumes.json", // Fruits & Légumes 210 produits
+          "/catalogue-otc.json",            // Pharmacie 150 produits
+          "/catalogue-alimentation.json",   // Reste (viandes, boissons, laitiers, bébé, surgelés)
         ];
-        const catalogProds: Product[] = [];
-        for (const file of catalogFiles) {
-          try {
-            const res = await fetch(file);
-            const data = await res.json();
-            const items = Array.isArray(data) ? data : data.products || [];
-            items.forEach((p:any, i:number) => {
-              if (!p.name && !p.name_fr) return;
-              const price = typeof p.priceEstimateCAD==="object"
-                ? Math.round(((p.priceEstimateCAD?.min||0)+(p.priceEstimateCAD?.max||0))/2*100)/100
-                : p.price || p.priceEstimateCAD || 0;
-              if (!price) return;
-              catalogProds.push({
-                id: `cat-${file.replace(/\//g,"")}-${i}`,
-                name: p.name||p.name_fr||"",
-                price,
-                imageUrl: p.imageUrl||"",
-                categoryName: p.categoryName||p.department||p.category||"",
-                subcategoryName: p.subcategoryName||p.subcategory||"",
-                department: p.department||"",
-                section: p.section||"",
-                storeId: p.storeId||defaultStoreId,
-                storeName: p.storeName||defaultStoreName,
-                isOrganic: p.isOrganic||false,
-                isFrozen: p.isFrozen||false,
-                isFresh: p.isFresh||false,
-              });
-            });
-          } catch(e){ console.warn("catalogue load failed:", file, e); }
+
+        function toProduct(p:any, i:number, file:string, storeId:string, storeName:string): Product|null {
+          const name = p.name||p.name_fr||"";
+          if (!name) return null;
+          const price = typeof p.priceEstimateCAD==="object"
+            ? Math.round(((p.priceEstimateCAD?.min||0)+(p.priceEstimateCAD?.max||0))/2*100)/100
+            : (p.price||p.priceEstimateCAD||0);
+          if (!price) return null;
+          return {
+            id:`cat-${file.slice(1,8)}-${i}`,
+            name,price,
+            imageUrl:p.imageUrl||"",
+            categoryName:p.categoryName||p.category||p.department||"",
+            subcategoryName:p.subcategoryName||p.subcategory||"",
+            department:p.department||"",
+            section:p.section||"",
+            storeId:p.storeId||storeId,
+            storeName:p.storeName||storeName,
+            isOrganic:!!p.isOrganic,
+            isFrozen:!!p.isFrozen,
+            isFresh:!!p.isFresh,
+          };
         }
 
-        // Fusionner — Firestore en premier, catalogues en complément
-        const firestoreIds = new Set(firestoreProds.map(p=>p.name.toLowerCase()));
-        const uniqueCatalog = catalogProds.filter(p=>!firestoreIds.has(p.name.toLowerCase()));
-        setProducts([...firestoreProds, ...uniqueCatalog]);
+        const seenNames = new Set(firestoreProds.map(p=>p.name.toLowerCase()));
+        const allCatalogProds: Product[] = [];
+
+        for (const file of CATALOGUE_FILES) {
+          try {
+            const res = await fetch(file);
+            const raw = await res.json();
+            const items = Array.isArray(raw) ? raw : raw.products||[];
+            for (let i=0;i<items.length;i++) {
+              const prod = toProduct(items[i],i,file,defaultStoreId,defaultStoreName);
+              if (!prod) continue;
+              const key = prod.name.toLowerCase();
+              if (!seenNames.has(key)) {
+                seenNames.add(key);
+                allCatalogProds.push(prod);
+              }
+            }
+          } catch(e){ console.warn("catalogue load failed:",file); }
+        }
+
+        setProducts([...firestoreProds, ...allCatalogProds]);
 
       } catch(e){console.error(e);}
       finally{setLoading(false);}
