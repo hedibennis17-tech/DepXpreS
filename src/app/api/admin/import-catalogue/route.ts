@@ -5,7 +5,8 @@ import { FieldValue } from "firebase-admin/firestore";
 
 export async function POST(req: NextRequest) {
   try {
-    const { storeId, products } = await req.json();
+    const body = await req.json();
+    const { storeId, products, catalogueType } = body;
     if (!storeId || !products?.length) {
       return NextResponse.json({ error: "storeId et products requis" }, { status: 400 });
     }
@@ -17,7 +18,6 @@ export async function POST(req: NextRequest) {
     }
 
     // Déterminer la catégorie selon le type de catalogue
-    const { catalogueType } = body;
     const catConfig = catalogueType === "fruits"
       ? { name: "Fruits & Légumes", slug: "fruits-legumes", emoji: "🥦", order: 1 }
       : { name: "Pharmacie / Santé", slug: "pharmacie-sante", emoji: "💊", order: 0 };
