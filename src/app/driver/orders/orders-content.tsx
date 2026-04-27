@@ -70,22 +70,41 @@ export default function DriverOrders() {
 
   // Appel API centralisée avec notifications
   async function doAction(orderId:string, action:string, extra:Record<string,any>={}) {
+    const dId = uidRef.current || uid;
+    console.log("doAction called:", {orderId, action, dId, uid, uidRef: uidRef.current});
+    
+    if(!dId) {
+      alert("Erreur: uid chauffeur non chargé. Reconnectez-vous.");
+      return;
+    }
+    
     setActing(orderId+action);
     try {
-      const dId = uidRef.current || uid;
-      if(!dId){ console.error("uid pas chargé"); return; }
+      const payload = {orderId, driverId:dId, action, ...extra};
+      console.log("Sending payload:", payload);
+      
       const res = await fetch("/api/driver/order-action",{
         method:"POST",
         headers:{"Content-Type":"application/json"},
-        body: JSON.stringify({orderId, driverId:dId, action, ...extra}),
+        body: JSON.stringify(payload),
       });
+      
       const text = await res.text();
-      console.log("order-action response:", res.status, text);
-      try {
-        const data = JSON.parse(text);
-        if(!data.ok) console.error("Action error:", data.error);
-      } catch(e){ console.error("Parse error:", e, text); }
-    } catch(e){ console.error(e); }
+      console.log("Response:", res.status, text);
+      
+      if(res.status !== 200) {
+        alert(`Erreur ${res.status}: ${text}`);
+        return;
+      }
+      
+      const data = JSON.parse(text);
+      if(!data.ok) {
+        alert(`Erreur action: ${data.error}`);
+      }
+    } catch(e){ 
+      console.error("doAction error:", e);
+      alert(`Exception: ${e}`);
+    }
     finally { setActing(null); }
   }
 
