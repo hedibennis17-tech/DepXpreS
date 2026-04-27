@@ -22,20 +22,26 @@ async function sendSMS(to: string, msg: string) {
 }
 
 async function sendEmail(to:string,name:string,subject:string,html:string){
-  if(!SGKEY||!to) return;
-  await fetch("https://api.sendgrid.com/v3/mail/send",{
-    method:"POST",
-    headers:{"Authorization":`Bearer ${SGKEY}`,"Content-Type":"application/json"},
-    body:JSON.stringify({personalizations:[{to:[{email:to,name}]}],from:{email:FROMEMAIL,name:"FastDép"},subject,content:[{type:"text/html",value:html}]}),
-  });
+  if(!SGKEY||!to) return {ok:false,reason:"no_config"};
+  try {
+    const r = await fetch("https://api.sendgrid.com/v3/mail/send",{
+      method:"POST",
+      headers:{"Authorization":`Bearer ${SGKEY}`,"Content-Type":"application/json"},
+      body:JSON.stringify({personalizations:[{to:[{email:to,name}]}],from:{email:FROMEMAIL,name:"FastDép"},subject,content:[{type:"text/html",value:html}]}),
+    });
+    if(r.status!==202){const err=await r.text();console.error("SendGrid error:",err);}
+    return {ok:r.status===202};
+  } catch(e){console.error("SendGrid exception:",e);return {ok:false};}
 }
 
 const wrap=(inner:string)=>`<div style="font-family:sans-serif;max-width:520px;margin:0 auto"><div style="background:#f97316;padding:16px 24px;border-radius:12px 12px 0 0"><h2 style="color:#fff;margin:0">⚡ FastDép</h2></div><div style="background:#fff;border:1px solid #e5e7eb;border-top:none;padding:24px;border-radius:0 0 12px 12px">${inner}<p style="color:#9ca3af;font-size:12px;margin-top:20px">Équipe FastDép</p></div></div>`;
 
 export async function POST(req:NextRequest){
   try{
-    const {orderId,driverId,action,reason,note,photoUrl,rating,comment}=await req.json();
-    if(!orderId||!driverId||!action) return NextResponse.json({error:"Params manquants"},{status:400});
+    const body = await req.json();
+    console.log("order-action called:", JSON.stringify(body));
+    const {orderId,driverId,action,reason,note,photoUrl,rating,comment}=body;
+    if(!orderId||!driverId||!action) return NextResponse.json({error:"Params manquants",received:body},{status:400});
 
     const orderDoc=await adminDb.collection("orders").doc(orderId).get();
     if(!orderDoc.exists) return NextResponse.json({error:"Commande introuvable"},{status:404});

@@ -216,9 +216,24 @@ export async function POST(req: NextRequest) {
     const wrap = (inner:string) => `<div style="${emailStyle}">${header}<div style="background:#fff;border:1px solid #e5e7eb;border-top:none;padding:24px;border-radius:0 0 12px 12px">${inner}${footer}</div></div>`;
     const itemsList = items.map((i:any)=>`<li>${i.qty}× ${i.name} — ${(i.price*i.qty).toFixed(2)}$</li>`).join("");
 
-    // Email store
+    // Email + SMS store — récupérer tous les champs possibles
     const storeDoc = await adminDb.collection("stores").doc(storeId).get();
-    const storeEmail = storeDoc.data()?.email || storeDoc.data()?.ownerEmail;
+    const storeData = storeDoc.data() || {};
+    const storeEmail = storeData.ownerEmail || storeData.email || storeData.contactEmail;
+    const storePhoneFinal = storePhone || storeData.phone || storeData.ownerPhone;
+
+    console.log("Store notif:", {storeId, storeEmail, storePhoneFinal, storeData_keys: Object.keys(storeData)});
+
+    // SMS store
+    if (storePhoneFinal) {
+      const smsResult = await sendSMS(storePhoneFinal,
+        `FastDép 🛍️ Nouvelle commande #${orderNumber}! Articles: ${items.map((i:any)=>`${i.qty}x ${i.name}`).join(", ")} | Livraison: ${deliveryAddress} | Total: ${(total||0).toFixed(2)}$`
+      );
+      console.log("SMS store result:", smsResult);
+    } else {
+      console.log("SMS store: pas de numéro de téléphone trouvé");
+    }
+
     if (storeEmail) {
       await sendEmail(storeEmail, storeName,
         `🛍️ Nouvelle commande #${orderNumber}`,
