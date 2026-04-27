@@ -25,20 +25,21 @@ interface StoreData {
   deliveryTime?: number; minOrder?: number;
 }
 
-// Catégories alignées avec les catalogues importés
+// Catégories alignées avec tous les catalogues
 const CATEGORIES = [
-  { key: "all",         emoji: "🏠", label: "Accueil",       match: [] },
-  { key: "alimentation",emoji: "🛒", label: "Épicerie",      match: ["alimentation","produits frais","garde-manger","produits laitiers","aliments congelés","boissons"] },
-  { key: "fruits",      emoji: "🥦", label: "Fruits & Légumes", match: ["fruits","légumes","fruits & légumes"] },
-  { key: "viandes",     emoji: "🥩", label: "Boucherie",     match: ["viandes","poissons","charcuterie"] },
-  { key: "pharma",      emoji: "💊", label: "Pharmacie",     match: ["pharmacie","santé","otc"] },
-  { key: "snacks",      emoji: "🍿", label: "Collations",    match: ["collations","snacks","chips"] },
-  { key: "boissons",    emoji: "🧃", label: "Boissons",      match: ["boissons","jus","eaux"] },
-  { key: "boulangerie", emoji: "🍞", label: "Boulangerie",   match: ["boulangerie","pain"] },
-  { key: "bebe",        emoji: "👶", label: "Bébé",          match: ["bébé","enfant","bebe","aliments pour bébés"] },
-  { key: "bio",         emoji: "🌿", label: "Bio",           match: ["bio"] },
-  { key: "congeles",    emoji: "❄️", label: "Surgelés",      match: ["congelés","surgelés","frozen"] },
-  { key: "vitamines",   emoji: "💪", label: "Vitamines",     match: ["vitamines","naturels"] },
+  { key:"all",          emoji:"🏠", label:"Accueil",          match:[] },
+  { key:"alimentation", emoji:"🛒", label:"Épicerie",         match:["alimentation","produits frais","garde-manger","produits laitiers","conserves","condiments","pâtes","riz","grains","déjeuner","céréales","épicerie"] },
+  { key:"fruits",       emoji:"🥦", label:"Fruits & Légumes", match:["fruits","légumes","fruits et légumes","pommes","agrumes","baies","racines","herbes","tomates","laitues","crucifères","poivrons"] },
+  { key:"viandes",      emoji:"🥩", label:"Boucherie",        match:["viandes","poissons","charcuterie","fruits de mer","volailles","boucherie"] },
+  { key:"pharma",       emoji:"💊", label:"Pharmacie",        match:["pharmacie","santé","otc","douleur","rhume","allergies","digestion","premiers soins","soins buccaux","yeux","oreilles"] },
+  { key:"snacks",       emoji:"🍿", label:"Collations",       match:["collations","snacks","chips","chocolat","bonbons","biscuits","barres","munchies"] },
+  { key:"boissons",     emoji:"🧃", label:"Boissons",         match:["boissons","jus","eaux","eau","thé","café","lait","boissons énergétiques","sport","lait et boissons"] },
+  { key:"laitiers",     emoji:"🥛", label:"Laitiers & Œufs",  match:["laitiers","fromages","œufs","yogourt","crème","beurre","lait et boissons"] },
+  { key:"boulangerie",  emoji:"🍞", label:"Boulangerie",      match:["boulangerie","pain","viennoiserie","biscuits"] },
+  { key:"bebe",         emoji:"👶", label:"Bébé",             match:["bébé","enfant","bebe","aliments pour bébés","besoins spéciaux"] },
+  { key:"bio",          emoji:"🌿", label:"Bio",              match:["bio"] },
+  { key:"congeles",     emoji:"❄️", label:"Surgelés",         match:["congelés","surgelés","frozen","surgelés"] },
+  { key:"vitamines",    emoji:"💪", label:"Vitamines",        match:["vitamines","naturels","produits naturels","suppléments"] },
 ];
 
 function matchCat(p: Product, key: string): boolean {
@@ -56,16 +57,18 @@ function matchCat(p: Product, key: string): boolean {
 
 // Sections produits pour la home
 const SECTIONS = [
-  { key:"alimentation", emoji:"🛒", label:"Épicerie & Alimentation", color:"#f97316", bg:"#fff7ed" },
-  { key:"fruits",       emoji:"🥦", label:"Fruits & Légumes",        color:"#22c55e", bg:"#f0fdf4" },
-  { key:"pharma",       emoji:"💊", label:"Pharmacie & Santé",       color:"#3b82f6", bg:"#eff6ff" },
-  { key:"viandes",      emoji:"🥩", label:"Boucherie & Poissons",    color:"#ef4444", bg:"#fef2f2" },
-  { key:"boissons",     emoji:"🧃", label:"Boissons",                color:"#8b5cf6", bg:"#f5f3ff" },
-  { key:"snacks",       emoji:"🍿", label:"Collations & Snacks",     color:"#f59e0b", bg:"#fffbeb" },
-  { key:"bebe",         emoji:"👶", label:"Bébé & Enfant",           color:"#ec4899", bg:"#fdf2f8" },
-  { key:"bio",          emoji:"🌿", label:"Produits Bio",            color:"#10b981", bg:"#ecfdf5" },
-  { key:"congeles",     emoji:"❄️", label:"Produits Surgelés",       color:"#06b6d4", bg:"#ecfeff" },
-  { key:"vitamines",    emoji:"💪", label:"Vitamines & Santé Nat.",  color:"#84cc16", bg:"#f7fee7" },
+  { key:"alimentation", emoji:"🛒", label:"Épicerie & Garde-Manger",   color:"#f97316", bg:"#fff7ed" },
+  { key:"fruits",       emoji:"🥦", label:"Fruits & Légumes",           color:"#22c55e", bg:"#f0fdf4" },
+  { key:"viandes",      emoji:"🥩", label:"Boucherie & Poissons",       color:"#ef4444", bg:"#fef2f2" },
+  { key:"pharma",       emoji:"💊", label:"Pharmacie & Santé",          color:"#3b82f6", bg:"#eff6ff" },
+  { key:"boissons",     emoji:"🧃", label:"Boissons",                   color:"#8b5cf6", bg:"#f5f3ff" },
+  { key:"laitiers",     emoji:"🥛", label:"Produits Laitiers & Œufs",   color:"#0ea5e9", bg:"#f0f9ff" },
+  { key:"snacks",       emoji:"🍿", label:"Collations & Snacks",        color:"#f59e0b", bg:"#fffbeb" },
+  { key:"boulangerie",  emoji:"🍞", label:"Boulangerie",                color:"#d97706", bg:"#fefce8" },
+  { key:"bio",          emoji:"🌿", label:"Produits Bio 🌱",            color:"#10b981", bg:"#ecfdf5" },
+  { key:"congeles",     emoji:"❄️", label:"Surgelés",                   color:"#06b6d4", bg:"#ecfeff" },
+  { key:"bebe",         emoji:"👶", label:"Bébé & Enfant",              color:"#ec4899", bg:"#fdf2f8" },
+  { key:"vitamines",    emoji:"💪", label:"Vitamines & Produits Naturels", color:"#84cc16", bg:"#f7fee7" },
 ];
 
 export default function ClientHome() {
@@ -99,9 +102,15 @@ export default function ClientHome() {
         const list = snap.docs.map(d=>({id:d.id,...d.data()} as StoreData));
         setStores(list.filter(s=>s.isOpen));
         setNearbyStores(list.filter(s=>!s.isOpen).slice(0,4));
-        // Produits
+
+        // Trouver le premier store actif pour lier les produits catalogues
+        const activeStore = list.find(s=>s.isOpen) || list[0];
+        const defaultStoreId = activeStore?.id || "";
+        const defaultStoreName = activeStore?.name || "FastDép";
+
+        // Produits Firestore (importés)
         const psnap = await getDocs(query(collection(db,"products"),limit(500)));
-        const prods = psnap.docs.map(d=>{
+        const firestoreProds = psnap.docs.map(d=>{
           const data = d.data();
           return {
             id:d.id,
@@ -119,7 +128,49 @@ export default function ClientHome() {
             isFresh: data.isFresh||false,
           } as Product;
         }).filter(p=>p.name&&p.price>0);
-        setProducts(prods);
+
+        // Charger catalogues JSON publics (alimentation + fruits + pharmacie)
+        const catalogFiles = [
+          "/catalogue-alimentation.json",
+          "/catalogue-fruits-legumes.json",
+          "/catalogue-otc.json",
+        ];
+        const catalogProds: Product[] = [];
+        for (const file of catalogFiles) {
+          try {
+            const res = await fetch(file);
+            const data = await res.json();
+            const items = Array.isArray(data) ? data : data.products || [];
+            items.forEach((p:any, i:number) => {
+              if (!p.name && !p.name_fr) return;
+              const price = typeof p.priceEstimateCAD==="object"
+                ? Math.round(((p.priceEstimateCAD?.min||0)+(p.priceEstimateCAD?.max||0))/2*100)/100
+                : p.price || p.priceEstimateCAD || 0;
+              if (!price) return;
+              catalogProds.push({
+                id: `cat-${file.replace(/\//g,"")}-${i}`,
+                name: p.name||p.name_fr||"",
+                price,
+                imageUrl: p.imageUrl||"",
+                categoryName: p.categoryName||p.department||p.category||"",
+                subcategoryName: p.subcategoryName||p.subcategory||"",
+                department: p.department||"",
+                section: p.section||"",
+                storeId: p.storeId||defaultStoreId,
+                storeName: p.storeName||defaultStoreName,
+                isOrganic: p.isOrganic||false,
+                isFrozen: p.isFrozen||false,
+                isFresh: p.isFresh||false,
+              });
+            });
+          } catch(e){ console.warn("catalogue load failed:", file, e); }
+        }
+
+        // Fusionner — Firestore en premier, catalogues en complément
+        const firestoreIds = new Set(firestoreProds.map(p=>p.name.toLowerCase()));
+        const uniqueCatalog = catalogProds.filter(p=>!firestoreIds.has(p.name.toLowerCase()));
+        setProducts([...firestoreProds, ...uniqueCatalog]);
+
       } catch(e){console.error(e);}
       finally{setLoading(false);}
     }
