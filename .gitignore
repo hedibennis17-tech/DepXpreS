@@ -47,3 +47,4 @@ service-account.json
 scripts/serviceAccount.json
 *.json
 !public/montreal_zones.json
+!public/catalogue-otc.json
