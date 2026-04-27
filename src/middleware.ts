@@ -26,6 +26,7 @@ const PUBLIC_ROUTES = [
   "/api/admin/test",
   "/api/admin/debug",
   "/api/admin/test-notif",
+  "/api/admin/test-order",
   "/api/messages-store",
   "/api/admin/notify-store",
   "/api/admin/notify",
