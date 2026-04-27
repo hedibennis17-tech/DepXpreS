@@ -138,13 +138,22 @@ export default function DriverOrders() {
   }
 
   function navigateTo(o:Order, phase:"pickup"|"dropoff"){
-    const dest  = phase==="pickup" ? o.storeAddress||"" : o.deliveryAddress||"";
-    const lat   = phase==="pickup" ? o.storeLat||0      : o.deliveryLat||0;
-    const lng   = phase==="pickup" ? o.storeLng||0      : o.deliveryLng||0;
+    // Passer les 2 stops pour afficher le trajet complet chauffeur→store→client
     router.push(`/driver/navigation?${new URLSearchParams({
-      orderId:o.id, phase, dest,
-      lat:String(lat), lng:String(lng),
-      client:o.clientName||"", phone:o.clientPhone||"",
+      orderId: o.id,
+      phase,
+      // Stop 1 : store
+      storeDest:  o.storeAddress||"",
+      storeLat:   String(o.storeLat||0),
+      storeLng:   String(o.storeLng||0),
+      storePhone: o.storePhone||"",
+      storeName:  o.storeName||"",
+      // Stop 2 : client
+      clientDest:  o.deliveryAddress||"",
+      clientLat:   String(o.deliveryLat||0),
+      clientLng:   String(o.deliveryLng||0),
+      clientName:  o.clientName||"",
+      clientPhone: o.clientPhone||"",
     })}`);
   }
 
