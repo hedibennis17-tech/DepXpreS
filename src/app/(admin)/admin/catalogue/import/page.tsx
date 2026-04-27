@@ -1,7 +1,7 @@
 "use client";
 import { useState, useEffect } from "react";
 import { Package, Store, CheckCircle2, Loader2, Upload, AlertCircle, ChevronDown } from "lucide-react";
-import CATALOGUE from "./catalogue-otc.json";
+
 
 interface StoreItem { id: string; name: string; }
 
@@ -13,6 +13,10 @@ const SUBCATEGORY_ICONS: Record<string,string> = {
 };
 
 export default function ImportCataloguePage() {
+  const [catalogue, setCatalogue] = useState<any[]>([]);
+  useEffect(()=>{
+    fetch("/catalogue-otc.json").then(r=>r.json()).then(d=>setCatalogue(d));
+  },[]);
   const [stores, setStores]       = useState<StoreItem[]>([]);
   const [selectedStore, setSelectedStore] = useState("");
   const [importing, setImporting] = useState(false);
@@ -27,7 +31,7 @@ export default function ImportCataloguePage() {
   },[]);
 
   // Grouper les produits par sous-catégorie
-  const grouped = (CATALOGUE as any[]).reduce((acc:Record<string,any[]>,p)=>{
+  const grouped = (catalogue as any[]).reduce((acc:Record<string,any[]>,p)=>{
     if (!acc[p.subcategory]) acc[p.subcategory]=[];
     acc[p.subcategory].push(p);
     return acc;
@@ -41,7 +45,7 @@ export default function ImportCataloguePage() {
         method:"POST",
         headers:{"Content-Type":"application/json"},
         credentials:"include",
-        body: JSON.stringify({ storeId: selectedStore, products: CATALOGUE }),
+        body: JSON.stringify({ storeId: selectedStore, products: catalogue }),
       });
       const data = await res.json();
       if (data.ok) setResult(data);
@@ -55,7 +59,7 @@ export default function ImportCataloguePage() {
       <div>
         <h1 className="text-2xl font-bold">📦 Import Catalogue Pharmacie</h1>
         <p className="text-muted-foreground text-sm mt-1">
-          {(CATALOGUE as any[]).length} produits OTC & Santé — 12 sous-catégories
+          {(catalogue as any[]).length} produits OTC & Santé — 12 sous-catégories
         </p>
       </div>
 
@@ -151,8 +155,8 @@ export default function ImportCataloguePage() {
       <button onClick={handleImport} disabled={!selectedStore||importing}
         className="w-full py-4 bg-orange-500 hover:bg-orange-600 text-white rounded-2xl font-bold flex items-center justify-center gap-2 disabled:opacity-50 transition-colors text-base">
         {importing
-          ? <><Loader2 className="h-5 w-5 animate-spin"/>Import en cours... ({(CATALOGUE as any[]).length} produits)</>
-          : <><Upload className="h-5 w-5"/>Importer {(CATALOGUE as any[]).length} produits dans le catalogue</>}
+          ? <><Loader2 className="h-5 w-5 animate-spin"/>Import en cours... ({(catalogue as any[]).length} produits)</>
+          : <><Upload className="h-5 w-5"/>Importer {(catalogue as any[]).length} produits dans le catalogue</>}
       </button>
     </div>
   );
