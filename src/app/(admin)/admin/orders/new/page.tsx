@@ -11,7 +11,7 @@ import {
 interface StoreItem { id:string; name:string; address:string; phone?:string; }
 interface Product   { id:string; name:string; price:number; categoryName:string; image?:string; inStock?:boolean; }
 interface Client    { id:string; fullName:string; phone:string; email:string; }
-interface Driver    { id:string; full_name:string; zone_name?:string; driver_status:string; last_lat?:number; last_lng?:number; vehicle_type?:string; }
+interface Driver    { id:string; name:string; full_name?:string; zone_name?:string; zone?:string; driver_status:string; isOnline?:boolean; last_lat?:number; last_lng?:number; vehicle_type?:string; vehicle?:string; phone?:string; rating?:number; }
 interface CartItem  { productId:string; name:string; qty:number; price:number; }
 
 type Step = 'order' | 'assign' | 'done';
@@ -162,7 +162,7 @@ export default function NewOrderPage() {
         headers:{'Content-Type':'application/json'},
         body:JSON.stringify({
           driverId:selectedDriver,
-          driverName:driverObj?.full_name,
+          driverName:driverObj?.name||driverObj?.full_name,
           status:'assigned',
         }),
       });
@@ -262,11 +262,13 @@ export default function NewOrderPage() {
                     : "border-border hover:border-orange-200 hover:bg-muted/30"
                 }`}>
                 <div className="w-10 h-10 bg-green-100 rounded-full flex items-center justify-center shrink-0">
-                  <span className="text-green-700 font-bold text-sm">{d.full_name?.[0]||"?"}</span>
+                  <span className="text-green-700 font-bold text-sm">{(d.name||d.full_name||"?")[0].toUpperCase()}</span>
                 </div>
                 <div className="flex-1 min-w-0">
-                  <p className="font-semibold text-sm">{d.full_name}</p>
-                  <p className="text-xs text-muted-foreground">{d.zone_name||"—"} · {d.vehicle_type||"Véhicule"}</p>
+                  <p className="font-semibold text-sm">{d.name||d.full_name||"—"}</p>
+                  <p className="text-xs text-muted-foreground">{d.vehicle||d.vehicle_type||"Véhicule"}</p>
+                  {d.phone && d.phone !== "—" && <p className="text-xs text-blue-500">{d.phone}</p>}
+                  {d.rating && d.rating > 0 && <p className="text-xs text-yellow-600">⭐ {d.rating.toFixed(1)}</p>}
                 </div>
                 <div className="flex items-center gap-1.5 shrink-0">
                   <span className="w-2 h-2 bg-green-500 rounded-full"/>
