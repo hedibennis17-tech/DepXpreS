@@ -1,7 +1,7 @@
 "use client";
 import { useState, useEffect } from "react";
 import { useCart } from "@/context/CartContext";
-import { useRouter } from "next/navigation";
+import { useRouter, useSearchParams } from "next/navigation";
 import { auth, db } from "@/lib/firebase";
 import { onAuthStateChanged, User as FirebaseUser } from "firebase/auth";
 import { collection, addDoc, serverTimestamp, doc, getDoc } from "firebase/firestore";
@@ -18,6 +18,7 @@ const DELIVERY_FEE = 4.99;
 export default function CheckoutContent() {
   const cart = useCart();
   const router = useRouter();
+  const params = useSearchParams();
   const promoCode = params.get("promo") || "";
 
   const [user, setUser] = useState<FirebaseUser | null>(null);
