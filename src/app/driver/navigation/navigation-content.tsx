@@ -11,157 +11,102 @@ import {
 
 const GMAPS_KEY = "AIzaSyAmDwm43D52jpgDp1MiNg_TvLBn_fDTsU8";
 
-// ── Flèche manœuvre ───────────────────────────────────────────────────────
 function ManeuverArrow({ maneuver, color }: { maneuver: string; color: string }) {
   const m = (maneuver || "").toLowerCase();
   let rotate = 0;
   if (m.includes("right")) rotate = 90;
-  else if (m.includes("left")) rotate = -90;
-  else if (m.includes("u-turn") || m.includes("uturn")) rotate = 180;
+  if (m.includes("left")) rotate = -90;
   if (m.includes("slight-right") || m.includes("slight_right")) rotate = 45;
   if (m.includes("slight-left") || m.includes("slight_left")) rotate = -45;
-  if (m.includes("roundabout")) return (
-    <svg width="40" height="40" viewBox="0 0 40 40" fill="none">
-      <path d="M20 6 A14 14 0 1 1 6 20" stroke={color} strokeWidth="4" strokeLinecap="round" fill="none"/>
-      <polygon points="20,2 14,10 26,10" fill={color} transform="rotate(30,20,20)"/>
-    </svg>
-  );
+  if (m.includes("u-turn") || m.includes("uturn")) rotate = 180;
   return (
-    <svg width="40" height="40" viewBox="0 0 40 40" fill="none"
-      style={{ transform: `rotate(${rotate}deg)`, transition: "transform 0.4s" }}>
-      <line x1="20" y1="36" x2="20" y2="10" stroke={color} strokeWidth="4" strokeLinecap="round"/>
-      <polygon points="20,4 12,15 28,15" fill={color}/>
+    <svg width="36" height="36" viewBox="0 0 36 36" fill="none"
+      style={{ transform: `rotate(${rotate}deg)`, transition: "transform 0.3s" }}>
+      <line x1="18" y1="32" x2="18" y2="8" stroke={color} strokeWidth="4" strokeLinecap="round"/>
+      <polygon points="18,3 10,13 26,13" fill={color}/>
     </svg>
   );
 }
 
 function stripHtml(s: string) {
-  return s.replace(/<[^>]*>/g, "").replace(/&nbsp;/g," ").replace(/&rsquo;/g,"'").trim();
+  return s.replace(/<[^>]*>/g, "").replace(/&nbsp;/g, " ").replace(/&rsquo;/g, "'").trim();
 }
 
+// Charge Google Maps SDK de façon fiable
+let gmapsPromise: Promise<void> | null = null;
 function loadGoogleMaps(): Promise<void> {
-  return new Promise((resolve, reject) => {
-    // Déjà chargé
-    if (window.google?.maps?.Map) { resolve(); return; }
-
-    // Script déjà dans le DOM — attendre qu'il finisse
-    if (document.querySelector("#gmaps-nav")) {
-      const t = setInterval(() => {
-        if (window.google?.maps?.Map) { clearInterval(t); resolve(); }
-      }, 150);
-      setTimeout(() => { clearInterval(t); reject(new Error("Google Maps timeout")); }, 15000);
-      return;
-    }
-
-    // Callback unique pour ce chargement
-    const cbName = "__gmapsNavCb_" + Date.now();
-    (window as any)[cbName] = () => {
-      delete (window as any)[cbName];
-      resolve();
-    };
-
+  if (gmapsPromise) return gmapsPromise;
+  gmapsPromise = new Promise((resolve, reject) => {
+    if ((window as any).google?.maps?.Map) { resolve(); return; }
+    const cbName = `__gmcb${Date.now()}`;
+    (window as any)[cbName] = () => { delete (window as any)[cbName]; resolve(); };
     const s = document.createElement("script");
-    s.id = "gmaps-nav";
-    s.async = true;
-    s.onerror = () => reject(new Error("Impossible de charger Google Maps. Vérifiez votre connexion."));
-    s.src = `https://maps.googleapis.com/maps/api/js?key=${GMAPS_KEY}&libraries=geometry&callback=${cbName}&loading=async`;
+    s.onerror = () => { gmapsPromise = null; reject(new Error("Échec chargement Google Maps")); };
+    s.src = `https://maps.googleapis.com/maps/api/js?key=${GMAPS_KEY}&libraries=geometry&callback=${cbName}`;
     document.head.appendChild(s);
-
-    setTimeout(() => reject(new Error("Google Maps timeout après 15s")), 15000);
+    setTimeout(() => { gmapsPromise = null; reject(new Error("Timeout Google Maps (15s)")); }, 15000);
   });
+  return gmapsPromise;
 }
 
 export default function NavigationContent() {
   const router = useRouter();
-  // Parser les params directement depuis window.location pour éviter les problèmes async
-  const getParam = (key: string, fallback = "") => {
-    if (typeof window === "undefined") return fallback;
-    return new URLSearchParams(window.location.search).get(key) || fallback;
-  };
-  const mapDiv = useRef<HTMLDivElement>(null);
-  const map = useRef<any>(null);
-  const driverMarker = useRef<any>(null);
-  const watchId = useRef<number | null>(null);
-  const stepsArr = useRef<any[]>([]);
-  const stepIdx = useRef(0);
-  const muted = useRef(false);
-  const lastSpoken = useRef("");
-  const uid = useRef("");
 
-  const [ready, setReady] = useState(false);
-  const [mapError, setMapError] = useState("");
-  const [muteUI, setMuteUI] = useState(false);
-  const [heading, setHeading] = useState(0);
-  const [maneuver, setManeuver] = useState("");
-  const [instruction, setInstruction] = useState("Calcul en cours…");
-  const [distStep, setDistStep] = useState("");
-  const [nextInstr, setNextInstr] = useState("");
-  const [eta, setEta] = useState("");
-  const [distStore, setDistStore] = useState("");
-  const [distClient, setDistClient] = useState("");
-  const [distTotal, setDistTotal] = useState("");
-  const [arrived, setArrived] = useState(false);
-  const [confirming, setConfirming] = useState(false);
-  const [coffee, setCoffee] = useState(false);
-  const paused = useRef(false);
-
-  // Params URL — lus une seule fois au mount
-  const [navParams] = useState(() => {
-    if (typeof window === "undefined") return {
-      phase: "pickup" as "pickup"|"dropoff", orderId: "",
-      storeName: "Commerce", storeLat: 0, storeLng: 0,
-      storePhone: "", storeDest: "",
-      clientName: "Client", clientLat: 0, clientLng: 0,
-      clientDest: "", clientPhone: "",
-    };
-    const p = new URLSearchParams(window.location.search);
-    return {
-      phase:       (p.get("phase") || "pickup") as "pickup"|"dropoff",
-      orderId:     p.get("orderId") || "",
-      storeName:   p.get("storeName") || "Commerce",
-      storeLat:    parseFloat(p.get("storeLat") || p.get("lat") || "0"),
-      storeLng:    parseFloat(p.get("storeLng") || p.get("lng") || "0"),
-      storePhone:  p.get("storePhone") || "",
-      storeDest:   p.get("storeDest") || p.get("dest") || "",
-      clientName:  p.get("clientName") || p.get("client") || "Client",
-      clientLat:   parseFloat(p.get("clientLat") || "0"),
-      clientLng:   parseFloat(p.get("clientLng") || "0"),
-      clientDest:  p.get("clientDest") || "",
-      clientPhone: p.get("clientPhone") || p.get("phone") || "",
-    };
-  });
-  const { phase, orderId, storeName, storeLat, storeLng, storePhone, storeDest,
-          clientName, clientLat, clientLng, clientDest, clientPhone } = navParams;
-  const isPickup   = phase === "pickup";
-  const activeColor= isPickup ? "#3b82f6" : "#22c55e";
-  const destLabel  = isPickup ? storeName : clientName;
-  const destAddr   = isPickup ? storeDest : clientDest;
-  const phoneCall  = isPickup ? storePhone : clientPhone;
-
+  // ── Lire les params UNE SEULE FOIS depuis l'URL ──────────────────────────
+  const P = useRef<Record<string,string>>({});
   useEffect(() => {
-    const u = onAuthStateChanged(auth, (u) => { if (u) uid.current = u.uid; });
-    return () => u();
+    P.current = Object.fromEntries(new URLSearchParams(window.location.search));
   }, []);
 
-  // ── Initialisation principale ──────────────────────────────────────────
+  // Tous les refs
+  const mapDiv    = useRef<HTMLDivElement>(null);
+  const mapObj    = useRef<any>(null);
+  const driverMk  = useRef<any>(null);
+  const watchId   = useRef<number|null>(null);
+  const steps     = useRef<any[]>([]);
+  const stepI     = useRef(0);
+  const mutedRef  = useRef(false);
+  const pausedRef = useRef(false);
+  const lastSpoke = useRef("");
+  const uidRef    = useRef("");
+  const drawnRef  = useRef(false);
+
+  // UI state
+  const [ready,     setReady]     = useState(false);
+  const [mapErr,    setMapErr]    = useState("");
+  const [mutedUI,   setMutedUI]   = useState(false);
+  const [heading,   setHeading]   = useState(0);
+  const [maneuver,  setManeuver]  = useState("");
+  const [instr,     setInstr]     = useState("Calcul de l'itinéraire…");
+  const [distStep,  setDistStep]  = useState("");
+  const [nextInstr, setNextInstr] = useState("");
+  const [eta,       setEta]       = useState("");
+  const [distStore, setDistStore] = useState("");
+  const [distClient,setDistClient]= useState("");
+  const [distTotal, setDistTotal] = useState("");
+  const [arrived,   setArrived]   = useState(false);
+  const [confirming,setConfirming]= useState(false);
+  const [coffee,    setCoffee]    = useState(false);
+
   useEffect(() => {
-    if (!storeLat || !storeLng) return;
+    return onAuthStateChanged(auth, u => { if (u) uidRef.current = u.uid; });
+  }, []);
+
+  // ── Init carte dès que le composant monte — PAS besoin de storeLat ───────
+  useEffect(() => {
     let cancelled = false;
 
-    async function init() {
-      try {
-        await loadGoogleMaps();
-      } catch (e: any) {
-        if (!cancelled) setMapError(e.message || "Erreur de chargement de la carte");
-        return;
-      }
+    async function boot() {
+      // 1. Charger SDK
+      try { await loadGoogleMaps(); }
+      catch (e: any) { if (!cancelled) setMapErr(e.message); return; }
       if (cancelled || !mapDiv.current) return;
 
-      // Créer la carte
+      // 2. Créer la carte centrée sur Laval (fallback si pas de GPS)
       const g = window.google.maps;
-      map.current = new g.Map(mapDiv.current, {
-        zoom: 16,
-        center: { lat: storeLat, lng: storeLng },
+      mapObj.current = new g.Map(mapDiv.current, {
+        zoom: 14,
+        center: { lat: 45.57, lng: -73.74 }, // Laval par défaut
         mapTypeId: "roadmap",
         disableDefaultUI: true,
         gestureHandling: "greedy",
@@ -178,220 +123,213 @@ export default function NavigationContent() {
           { featureType: "transit", stylers: [{ visibility: "off" }] },
         ],
       });
-
       setReady(true);
 
-      // Demander position GPS
+      // 3. Demander GPS du chauffeur
       navigator.geolocation.getCurrentPosition(
-        (pos) => {
+        pos => {
           if (cancelled) return;
           const origin = { lat: pos.coords.latitude, lng: pos.coords.longitude };
-          map.current.setCenter(origin);
-          placeDriverMarker(origin, 0);
-          drawRoutes(origin);
+          mapObj.current.setCenter(origin);
+          mapObj.current.setZoom(15);
+          putDriverMarker(origin, 0);
+          drawAllRoutes(origin);
           startWatch();
         },
         () => {
-          // Fallback: utiliser le store comme origine approx
-          const origin = { lat: storeLat - 0.01, lng: storeLng - 0.01 };
-          drawRoutes(origin);
-          startWatch();
+          // Pas de GPS — dessiner quand même avec coords du store
+          const p = new URLSearchParams(window.location.search);
+          const slat = parseFloat(p.get("storeLat") || p.get("lat") || "0");
+          const slng = parseFloat(p.get("storeLng") || p.get("lng") || "0");
+          if (slat && slng) {
+            const fakeOrigin = { lat: slat - 0.008, lng: slng - 0.005 };
+            drawAllRoutes(fakeOrigin);
+          }
         },
-        { enableHighAccuracy: true, timeout: 8000 }
+        { enableHighAccuracy: true, timeout: 10000 }
       );
     }
 
-    init();
+    boot();
     return () => { cancelled = true; };
-  }, [storeLat, storeLng]);
+  }, []); // Une seule fois au mount
 
-  // ── Marqueur chauffeur (flèche orange) ───────────────────────────────
-  function placeDriverMarker(loc: { lat: number; lng: number }, hdg: number) {
+  // ── Placer la flèche chauffeur ──────────────────────────────────────────
+  function putDriverMarker(loc: {lat:number;lng:number}, hdg: number) {
+    if (!mapObj.current || !window.google) return;
     const g = window.google.maps;
     const icon = {
-      path: "M 0,-1 L 0.6,0.8 L 0,0.4 L -0.6,0.8 Z",
-      scale: 28,
-      fillColor: "#f97316",
-      fillOpacity: 1,
-      strokeColor: "#ffffff",
-      strokeWeight: 2,
+      path: "M 0,-1.2 L 0.7,0.8 L 0,0.3 L -0.7,0.8 Z",
+      scale: 26,
+      fillColor: "#f97316", fillOpacity: 1,
+      strokeColor: "#ffffff", strokeWeight: 2,
       rotation: hdg,
       anchor: new g.Point(0, 0),
     };
-    if (!driverMarker.current) {
-      driverMarker.current = new g.Marker({ position: loc, map: map.current, icon, zIndex: 20 });
+    if (!driverMk.current) {
+      driverMk.current = new g.Marker({ position: loc, map: mapObj.current, icon, zIndex: 20 });
     } else {
-      driverMarker.current.setPosition(loc);
-      driverMarker.current.setIcon(icon);
+      driverMk.current.setPosition(loc);
+      driverMk.current.setIcon(icon);
     }
   }
 
-  // ── Marqueur coloré avec label ────────────────────────────────────────
-  function placeMarker(pos: { lat: number; lng: number }, color: string, label: string, title: string) {
+  // ── Marqueur coloré ─────────────────────────────────────────────────────
+  function putMarker(pos: {lat:number;lng:number}, color: string, emoji: string, title: string) {
+    if (!mapObj.current || !window.google) return;
     const g = window.google.maps;
     new g.Marker({
-      position: pos, map: map.current, zIndex: 15, title,
-      icon: {
-        path: g.SymbolPath.CIRCLE,
-        scale: 14,
-        fillColor: color, fillOpacity: 1,
-        strokeColor: "#ffffff", strokeWeight: 3,
-      },
+      position: pos, map: mapObj.current, zIndex: 15, title,
+      icon: { path: g.SymbolPath.CIRCLE, scale: 14, fillColor: color, fillOpacity: 1, strokeColor: "#fff", strokeWeight: 3 },
     });
     new g.Marker({
-      position: pos, map: map.current, zIndex: 16,
-      label: { text: label, fontSize: "14px" },
+      position: pos, map: mapObj.current, zIndex: 16,
+      label: { text: emoji, fontSize: "14px" },
       icon: { path: g.SymbolPath.CIRCLE, scale: 0 },
     });
   }
 
-  // ── Tracer les 2 routes ───────────────────────────────────────────────
-  function drawRoutes(origin: { lat: number; lng: number }) {
+  // ── Dessiner les 2 routes + calculs ─────────────────────────────────────
+  function drawAllRoutes(origin: {lat:number;lng:number}) {
+    if (!mapObj.current || !window.google || drawnRef.current) return;
+    drawnRef.current = true;
+
+    const p = new URLSearchParams(window.location.search);
+    const phase    = p.get("phase") || "pickup";
+    const slat     = parseFloat(p.get("storeLat") || p.get("lat") || "0");
+    const slng     = parseFloat(p.get("storeLng") || p.get("lng") || "0");
+    const clat     = parseFloat(p.get("clientLat") || "0");
+    const clng     = parseFloat(p.get("clientLng") || "0");
+    const sName    = p.get("storeName") || "Store";
+    const cName    = p.get("clientName") || p.get("client") || "Client";
+
+    if (!slat || !slng) {
+      setInstr("Coordonnées du store manquantes");
+      return;
+    }
+
     const g = window.google.maps;
     const DS = new g.DirectionsService();
 
-    // Marqueur store
-    placeMarker({ lat: storeLat, lng: storeLng }, "#3b82f6", "🏪", storeName);
+    // Marqueurs
+    putMarker({ lat: slat, lng: slng }, "#3b82f6", "🏪", sName);
+    if (clat && clng) putMarker({ lat: clat, lng: clng }, "#22c55e", "📦", cName);
 
-    // Marqueur client si coords disponibles
-    if (clientLat && clientLng) {
-      placeMarker({ lat: clientLat, lng: clientLng }, "#22c55e", "📦", clientName);
-    }
+    // Bounds pour zoom automatique
+    const bounds = new g.LatLngBounds();
+    bounds.extend(origin);
+    bounds.extend({ lat: slat, lng: slng });
+    if (clat && clng) bounds.extend({ lat: clat, lng: clng });
 
-    // ── Route 1 : chauffeur → store (bleue) ──────────────────────────
+    // ── Route 1: chauffeur → store (bleue) ─────────────────────────────
     const r1 = new g.DirectionsRenderer({
       suppressMarkers: true,
       polylineOptions: { strokeColor: "#3b82f6", strokeWeight: 6, strokeOpacity: 0.9 },
     });
-    r1.setMap(map.current);
+    r1.setMap(mapObj.current);
 
     DS.route({
       origin,
-      destination: { lat: storeLat, lng: storeLng },
+      destination: { lat: slat, lng: slng },
       travelMode: g.TravelMode.DRIVING,
     }, (res: any, status: string) => {
       if (status !== "OK") {
-        console.error("Route 1 error:", status);
+        setInstr(`Erreur route: ${status}`);
         return;
       }
       r1.setDirections(res);
-      const leg = res.routes[0].legs[0];
-      setDistStore(leg.distance.text);
+      const leg1 = res.routes[0].legs[0];
+      setDistStore(leg1.distance.text);
 
-      // Calculer distance totale
-      if (clientLat && clientLng) {
+      // Navigation active sur segment courant
+      if (phase === "pickup") {
+        initNavSteps(leg1.steps);
+      }
+
+      // ── Route 2: store → client (verte) ────────────────────────────
+      if (clat && clng) {
+        const r2 = new g.DirectionsRenderer({
+          suppressMarkers: true,
+          polylineOptions: { strokeColor: "#22c55e", strokeWeight: 5, strokeOpacity: 0.75 },
+        });
+        r2.setMap(mapObj.current);
+
         DS.route({
-          origin: { lat: storeLat, lng: storeLng },
-          destination: { lat: clientLat, lng: clientLng },
+          origin: { lat: slat, lng: slng },
+          destination: { lat: clat, lng: clng },
           travelMode: g.TravelMode.DRIVING,
         }, (res2: any, s2: string) => {
           if (s2 !== "OK") return;
-
-          // Route 2 : store → client (verte pointillée)
-          const r2 = new g.DirectionsRenderer({
-            suppressMarkers: true,
-            polylineOptions: { strokeColor: "#22c55e", strokeWeight: 5, strokeOpacity: 0.7 },
-          });
-          r2.setMap(map.current);
           r2.setDirections(res2);
-
           const leg2 = res2.routes[0].legs[0];
           setDistClient(leg2.distance.text);
-          const totalM = leg.distance.value + leg2.distance.value;
+
+          const totalM = leg1.distance.value + leg2.distance.value;
           setDistTotal(totalM >= 1000 ? `${(totalM/1000).toFixed(1)} km` : `${totalM} m`);
-          const totalMin = Math.round((leg.duration.value + leg2.duration.value) / 60);
+          const totalMin = Math.round((leg1.duration.value + leg2.duration.value) / 60);
           setEta(`${totalMin} min`);
+
+          if (phase === "dropoff") initNavSteps(leg2.steps);
         });
       } else {
-        setDistTotal(leg.distance.text);
-        setEta(leg.duration.text);
+        setDistTotal(leg1.distance.text);
+        setEta(leg1.duration.text);
       }
 
-      // Navigation active sur le bon segment
-      const activeSteps = isPickup ? leg.steps : [];
-      if (!isPickup && clientLat && clientLng) {
-        DS.route({
-          origin,
-          destination: { lat: clientLat, lng: clientLng },
-          travelMode: g.TravelMode.DRIVING,
-        }, (rDrop: any, sDrop: string) => {
-          if (sDrop !== "OK") return;
-          const dropLeg = rDrop.routes[0].legs[0];
-          initSteps(dropLeg.steps);
-        });
-      } else {
-        initSteps(leg.steps);
-      }
-
-      // Zoom sur tous les points
-      const bounds = new g.LatLngBounds();
-      bounds.extend(origin);
-      bounds.extend({ lat: storeLat, lng: storeLng });
-      if (clientLat && clientLng) bounds.extend({ lat: clientLat, lng: clientLng });
-      map.current.fitBounds(bounds, { top: 80, bottom: 200, left: 20, right: 20 });
+      mapObj.current.fitBounds(bounds, { top: 120, bottom: 220, left: 30, right: 30 });
     });
   }
 
-  function initSteps(steps: any[]) {
-    stepsArr.current = steps;
-    stepIdx.current = 0;
-    if (steps.length > 0) {
-      const s = steps[0];
-      setInstruction(stripHtml(s.instructions));
-      setDistStep(s.distance.text);
-      setManeuver(s.maneuver || "");
-      if (steps[1]) setNextInstr(`${steps[1].distance.text} · ${stripHtml(steps[1].instructions)}`);
-      speak(stripHtml(s.instructions));
-    }
+  function initNavSteps(ss: any[]) {
+    steps.current = ss;
+    stepI.current = 0;
+    if (!ss.length) return;
+    const s0 = ss[0];
+    setInstr(stripHtml(s0.instructions));
+    setDistStep(s0.distance.text);
+    setManeuver(s0.maneuver || "");
+    if (ss[1]) setNextInstr(`${ss[1].distance.text} · ${stripHtml(ss[1].instructions)}`);
+    speak(stripHtml(s0.instructions));
   }
 
-  // ── Suivi GPS en temps réel ──────────────────────────────────────────
+  // ── GPS Watch ─────────────────────────────────────────────────────────
   function startWatch() {
-    if (!navigator.geolocation) return;
     watchId.current = navigator.geolocation.watchPosition(
-      (pos) => {
-        if (paused.current) return;
+      pos => {
+        if (pausedRef.current) return;
         const loc = { lat: pos.coords.latitude, lng: pos.coords.longitude };
         const hdg = pos.coords.heading ?? 0;
         setHeading(hdg);
-        placeDriverMarker(loc, hdg);
-        if (hdg > 5) map.current?.setHeading(hdg);
-        map.current?.panTo(loc);
-        updateFirestore(loc, hdg);
-        checkProgress(loc);
+        putDriverMarker(loc, hdg);
+        if (hdg > 5) mapObj.current?.setHeading(hdg);
+        mapObj.current?.panTo(loc);
+        updateFS(loc, hdg);
+        advanceStep(loc);
       },
-      (e) => console.warn("GPS watch:", e.message),
+      err => console.warn("GPS:", err.message),
       { enableHighAccuracy: true, maximumAge: 2000, timeout: 15000 }
     );
   }
 
-  function checkProgress(loc: { lat: number; lng: number }) {
-    const steps = stepsArr.current;
-    const idx = stepIdx.current;
-    if (!steps.length || !window.google) return;
+  function advanceStep(loc: {lat:number;lng:number}) {
+    const ss = steps.current;
+    const i  = stepI.current;
+    if (!ss.length || !window.google) return;
     const g = window.google.maps;
-    const curr = steps[idx];
-    if (!curr) return;
 
-    const dist = g.geometry.spherical.computeDistanceBetween(
-      new g.LatLng(loc.lat, loc.lng),
-      curr.end_location
+    const d = g.geometry.spherical.computeDistanceBetween(
+      new g.LatLng(loc.lat, loc.lng), ss[i].end_location
     );
-    if (dist < 20 && idx < steps.length - 1) {
-      const ni = idx + 1;
-      stepIdx.current = ni;
-      const ns = steps[ni];
-      const instr = stripHtml(ns.instructions);
-      setInstruction(instr);
-      setDistStep(ns.distance.text);
-      setManeuver(ns.maneuver || "");
-      if (steps[ni + 1]) setNextInstr(`${steps[ni+1].distance.text} · ${stripHtml(steps[ni+1].instructions)}`);
-      else setNextInstr("");
-      speak(instr);
+    if (d < 20 && i < ss.length - 1) {
+      const ni = i + 1;
+      stepI.current = ni;
+      const ns = ss[ni];
+      const txt = stripHtml(ns.instructions);
+      setInstr(txt); setDistStep(ns.distance.text); setManeuver(ns.maneuver || "");
+      setNextInstr(ss[ni+1] ? `${ss[ni+1].distance.text} · ${stripHtml(ss[ni+1].instructions)}` : "");
+      speak(txt);
     }
-
-    // Détection arrivée (15m de la dernière étape)
-    const last = steps[steps.length - 1];
+    const last = ss[ss.length-1];
     const dFin = g.geometry.spherical.computeDistanceBetween(
       new g.LatLng(loc.lat, loc.lng), last.end_location
     );
@@ -399,8 +337,8 @@ export default function NavigationContent() {
   }
 
   function speak(text: string) {
-    if (muted.current || !window.speechSynthesis || text === lastSpoken.current) return;
-    lastSpoken.current = text;
+    if (mutedRef.current || !window.speechSynthesis || text === lastSpoke.current) return;
+    lastSpoke.current = text;
     window.speechSynthesis.cancel();
     const u = new SpeechSynthesisUtterance(text);
     u.lang = "fr-FR"; u.rate = 1.05;
@@ -408,28 +346,30 @@ export default function NavigationContent() {
   }
 
   function recalc() {
-    stepsArr.current = [];
-    stepIdx.current = 0;
-    setInstruction("Recalcul en cours…");
-    setDistStep(""); setManeuver("");
+    drawnRef.current = false;
+    steps.current = []; stepI.current = 0;
+    setInstr("Recalcul…"); setDistStep(""); setManeuver("");
+    setDistStore(""); setDistClient(""); setDistTotal(""); setEta("");
     navigator.geolocation.getCurrentPosition(
-      (pos) => drawRoutes({ lat: pos.coords.latitude, lng: pos.coords.longitude }),
+      pos => drawAllRoutes({ lat: pos.coords.latitude, lng: pos.coords.longitude }),
       () => {},
       { enableHighAccuracy: true, timeout: 8000 }
     );
   }
 
-  async function updateFirestore(loc: { lat: number; lng: number }, hdg: number) {
-    if (!uid.current) return;
+  async function updateFS(loc: {lat:number;lng:number}, hdg: number) {
+    if (!uidRef.current) return;
     try {
-      await updateDoc(doc(db, "driver_profiles", uid.current), {
-        last_lat: loc.lat, last_lng: loc.lng,
-        heading: hdg, updatedAt: serverTimestamp(),
+      await updateDoc(doc(db, "driver_profiles", uidRef.current), {
+        last_lat: loc.lat, last_lng: loc.lng, heading: hdg, updatedAt: serverTimestamp(),
       });
     } catch {}
   }
 
   async function confirmArrival() {
+    const p = new URLSearchParams(window.location.search);
+    const orderId = p.get("orderId") || "";
+    const phase   = p.get("phase") || "pickup";
     if (!orderId || confirming) return;
     setConfirming(true);
     try {
@@ -437,8 +377,8 @@ export default function NavigationContent() {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
-          orderId, driverId: uid.current,
-          action: isPickup ? "arrived_store" : "arrived_client",
+          orderId, driverId: uidRef.current,
+          action: phase === "pickup" ? "arrived_store" : "arrived_client",
         }),
       });
       if (watchId.current != null) navigator.geolocation.clearWatch(watchId.current);
@@ -453,13 +393,30 @@ export default function NavigationContent() {
     window.speechSynthesis?.cancel();
   }, []);
 
+  // Lire phase/noms depuis URL pour l'UI
+  const urlParams = typeof window !== "undefined"
+    ? new URLSearchParams(window.location.search) : new URLSearchParams();
+  const phase      = urlParams.get("phase") || "pickup";
+  const isPickup   = phase === "pickup";
+  const activeColor = isPickup ? "#3b82f6" : "#22c55e";
+  const destLabel  = isPickup
+    ? (urlParams.get("storeName") || "Commerce")
+    : (urlParams.get("clientName") || urlParams.get("client") || "Client");
+  const destAddr   = isPickup
+    ? (urlParams.get("storeDest") || urlParams.get("dest") || "")
+    : (urlParams.get("clientDest") || "");
+  const phoneCall  = isPickup
+    ? (urlParams.get("storePhone") || "")
+    : (urlParams.get("clientPhone") || urlParams.get("phone") || "");
+  const sName      = urlParams.get("storeName") || "Store";
+  const cName      = urlParams.get("clientName") || urlParams.get("client") || "Client";
+  const cLat       = parseFloat(urlParams.get("clientLat") || "0");
+
   return (
     <div className="fixed inset-0 bg-[#0f0f0f] flex flex-col" style={{ zIndex: 100 }}>
 
-      {/* ══ HEADER manœuvre ══ */}
+      {/* ══ HEADER ══ */}
       <div className="shrink-0 bg-[#111]/95 backdrop-blur-sm border-b border-white/5">
-
-        {/* Ligne 1 : flèche + instruction + son */}
         <div className="flex items-center gap-3 px-3 pt-3 pb-2">
           <button onClick={() => {
             if (watchId.current != null) navigator.geolocation.clearWatch(watchId.current);
@@ -469,7 +426,6 @@ export default function NavigationContent() {
             <ArrowLeft className="h-5 w-5" />
           </button>
 
-          {/* Icône manœuvre */}
           <div className="w-14 h-14 rounded-2xl flex items-center justify-center shrink-0"
             style={{ background: activeColor + "25" }}>
             <ManeuverArrow maneuver={maneuver} color={activeColor} />
@@ -477,16 +433,15 @@ export default function NavigationContent() {
 
           <div className="flex-1 min-w-0">
             {distStep && <p className="text-2xl font-black text-white leading-none">{distStep}</p>}
-            <p className="text-sm font-semibold text-gray-200 leading-tight line-clamp-2 mt-0.5">{instruction}</p>
+            <p className="text-sm font-semibold text-gray-200 leading-tight line-clamp-2 mt-0.5">{instr}</p>
           </div>
 
-          <button onClick={() => { muted.current = !muted.current; setMuteUI(m => !m); }}
+          <button onClick={() => { mutedRef.current = !mutedRef.current; setMutedUI(m => !m); }}
             className="p-2 rounded-xl bg-white/5 text-gray-400 shrink-0">
-            {muteUI ? <VolumeX className="h-5 w-5" /> : <Volume2 className="h-5 w-5" />}
+            {mutedUI ? <VolumeX className="h-5 w-5" /> : <Volume2 className="h-5 w-5" />}
           </button>
         </div>
 
-        {/* Ligne 2 : prochaine étape */}
         {nextInstr && (
           <div className="px-4 pb-2 flex items-center gap-2">
             <div className="w-1 h-1 rounded-full bg-gray-500" />
@@ -494,10 +449,9 @@ export default function NavigationContent() {
           </div>
         )}
 
-        {/* Ligne 3 : ETA + distances + recalc */}
-        <div className="flex items-center gap-3 px-4 pb-2 border-t border-white/5 pt-2">
+        <div className="flex items-center gap-3 px-4 pb-2 border-t border-white/5 pt-2 flex-wrap">
           {eta && (
-            <div className="flex items-center gap-1">
+            <div className="flex items-center gap-1.5">
               <Clock className="h-3.5 w-3.5 text-orange-400" />
               <span className="text-sm font-black text-white">{eta}</span>
             </div>
@@ -505,19 +459,19 @@ export default function NavigationContent() {
           {distStore && (
             <div className="flex items-center gap-1.5">
               <span className="w-2 h-2 rounded-full bg-blue-500 shrink-0" />
-              <span className="text-xs text-gray-400">{distStore} store</span>
+              <span className="text-xs text-gray-400">{distStore} → 🏪</span>
             </div>
           )}
           {distClient && (
             <div className="flex items-center gap-1.5">
               <span className="w-2 h-2 rounded-full bg-green-500 shrink-0" />
-              <span className="text-xs text-gray-400">{distClient} client</span>
+              <span className="text-xs text-gray-400">{distClient} → 📦</span>
             </div>
           )}
           {distTotal && (
-            <span className="ml-auto text-xs font-bold text-gray-500">Total {distTotal}</span>
+            <span className="ml-auto text-xs font-bold text-gray-400">Total {distTotal}</span>
           )}
-          <button onClick={recalc} className="p-1.5 rounded-lg bg-white/8 text-gray-400 shrink-0">
+          <button onClick={recalc} className="p-1.5 rounded-lg bg-white/5 text-gray-400">
             <RotateCcw className="h-3.5 w-3.5" />
           </button>
         </div>
@@ -525,63 +479,65 @@ export default function NavigationContent() {
 
       {/* ══ CARTE ══ */}
       <div className="flex-1 relative overflow-hidden">
-        {!ready && !mapError && (
-          <div className="absolute inset-0 flex items-center justify-center bg-[#0f0f0f] z-10">
+        {/* Overlay chargement */}
+        {!ready && !mapErr && (
+          <div className="absolute inset-0 bg-[#0f0f0f] z-10 flex items-center justify-center">
             <div className="text-center">
               <Loader2 className="h-8 w-8 animate-spin text-orange-500 mx-auto mb-3" />
               <p className="text-gray-400 text-sm">Chargement navigation…</p>
-              <p className="text-gray-600 text-xs mt-1">Connexion GPS en cours</p>
             </div>
           </div>
         )}
-        {mapError && (
-          <div className="absolute inset-0 flex items-center justify-center bg-[#0f0f0f] z-10">
-            <div className="text-center px-6">
-              <div className="w-14 h-14 rounded-2xl bg-red-500/20 flex items-center justify-center mx-auto mb-4">
-                <AlertTriangle className="h-7 w-7 text-red-400" />
-              </div>
-              <p className="text-white font-bold mb-2">Carte non disponible</p>
-              <p className="text-gray-400 text-sm mb-4">{mapError}</p>
-              <button onClick={() => { setMapError(""); setReady(false); }}
+        {/* Overlay erreur */}
+        {mapErr && (
+          <div className="absolute inset-0 bg-[#0f0f0f] z-10 flex items-center justify-center px-6">
+            <div className="text-center">
+              <AlertTriangle className="h-10 w-10 text-red-400 mx-auto mb-3" />
+              <p className="text-white font-bold mb-1">Carte indisponible</p>
+              <p className="text-gray-400 text-sm mb-4">{mapErr}</p>
+              <button onClick={() => { setMapErr(""); gmapsPromise = null; }}
                 className="px-5 py-2.5 bg-orange-500 text-white rounded-xl text-sm font-bold">
                 Réessayer
               </button>
             </div>
           </div>
         )}
+
         <div ref={mapDiv} className="w-full h-full" />
 
-        {/* Boussole */}
-        <button onClick={() => map.current?.setHeading(0)}
-          className="absolute top-3 right-3 w-10 h-10 rounded-full bg-black/70 flex items-center justify-center border border-white/10">
-          <div style={{ transform: `rotate(${-heading}deg)`, transition: "transform 0.4s" }}>
-            <Navigation className="h-5 w-5 text-red-400" />
-          </div>
-        </button>
-
         {/* Légende */}
-        <div className="absolute top-3 left-3 bg-black/70 backdrop-blur-sm rounded-2xl px-3 py-2 space-y-1.5 border border-white/10">
-          <div className="flex items-center gap-2">
-            <span className="w-2.5 h-2.5 rounded-full bg-orange-500 shrink-0" />
-            <span className="text-xs text-gray-300 font-medium">Vous</span>
-          </div>
-          <div className="flex items-center gap-2">
-            <span className="w-2.5 h-2.5 rounded-full bg-blue-500 shrink-0" />
-            <span className="text-xs text-gray-300">🏪 {storeName}</span>
-          </div>
-          {clientLat > 0 && (
+        {ready && (
+          <div className="absolute top-3 left-3 bg-black/70 rounded-2xl px-3 py-2 space-y-1.5 border border-white/10">
             <div className="flex items-center gap-2">
-              <span className="w-2.5 h-2.5 rounded-full bg-green-500 shrink-0" />
-              <span className="text-xs text-gray-300">📦 {clientName}</span>
+              <span className="w-2.5 h-2.5 rounded-full bg-orange-500 shrink-0" />
+              <span className="text-xs text-gray-300 font-medium">Vous</span>
             </div>
-          )}
-        </div>
+            <div className="flex items-center gap-2">
+              <span className="w-2.5 h-2.5 rounded-full bg-blue-500 shrink-0" />
+              <span className="text-xs text-gray-300">🏪 {sName}</span>
+            </div>
+            {cLat > 0 && (
+              <div className="flex items-center gap-2">
+                <span className="w-2.5 h-2.5 rounded-full bg-green-500 shrink-0" />
+                <span className="text-xs text-gray-300">📦 {cName}</span>
+              </div>
+            )}
+          </div>
+        )}
+
+        {/* Boussole */}
+        {ready && (
+          <button onClick={() => mapObj.current?.setHeading(0)}
+            className="absolute top-3 right-3 w-10 h-10 rounded-full bg-black/70 flex items-center justify-center border border-white/10">
+            <div style={{ transform: `rotate(${-heading}deg)`, transition: "transform 0.4s" }}>
+              <Navigation className="h-5 w-5 text-red-400" />
+            </div>
+          </button>
+        )}
       </div>
 
       {/* ══ BOTTOM BAR ══ */}
       <div className="shrink-0 bg-[#111] border-t border-white/5 px-4 pt-3 pb-6">
-
-        {/* Destination + actions */}
         <div className="flex items-center gap-3 mb-3">
           <div className="w-9 h-9 rounded-xl flex items-center justify-center shrink-0"
             style={{ background: activeColor + "25" }}>
@@ -590,10 +546,10 @@ export default function NavigationContent() {
           <div className="flex-1 min-w-0">
             <p className="text-[11px] text-gray-500 font-medium">{isPickup ? "Commerce" : "Livraison pour"}</p>
             <p className="text-sm font-bold text-white truncate">{destLabel}</p>
-            <p className="text-xs text-gray-500 truncate">{destAddr}</p>
+            {destAddr && <p className="text-xs text-gray-500 truncate">{destAddr}</p>}
           </div>
           <div className="flex items-center gap-2 shrink-0">
-            <button onClick={() => { paused.current = true; setCoffee(true); }}
+            <button onClick={() => { pausedRef.current = true; setCoffee(true); }}
               className="w-9 h-9 rounded-xl bg-amber-500/20 flex items-center justify-center">
               <Coffee className="h-4 w-4 text-amber-400" />
             </button>
@@ -608,7 +564,6 @@ export default function NavigationContent() {
           </div>
         </div>
 
-        {/* Bouton arrivée */}
         <button onClick={confirmArrival} disabled={confirming}
           className="w-full py-4 rounded-2xl font-bold text-white text-sm flex items-center justify-center gap-2 transition-all active:scale-95 disabled:opacity-50"
           style={{ background: arrived ? activeColor : "#1f2937" }}>
@@ -616,12 +571,9 @@ export default function NavigationContent() {
             ? <><Loader2 className="h-4 w-4 animate-spin" />Confirmation…</>
             : <><CheckCircle2 className="h-5 w-5" />{isPickup ? "✅ Arrivé au commerce" : "✅ Arrivé chez le client"}</>}
         </button>
-        {!arrived && (
-          <p className="text-center text-xs text-gray-600 mt-1.5">S&apos;active automatiquement à l&apos;arrivée</p>
-        )}
+        <p className="text-center text-xs text-gray-600 mt-1.5">S&apos;active automatiquement à l&apos;arrivée</p>
       </div>
 
-      {/* Modal pause café */}
       {coffee && (
         <div className="fixed inset-0 z-[200] flex items-end justify-center bg-black/60 p-4">
           <div className="w-full max-w-sm bg-[#1a1a1a] rounded-3xl p-6 space-y-4">
@@ -630,11 +582,11 @@ export default function NavigationContent() {
                 <Coffee className="w-5 h-5 text-amber-400" />
               </div>
               <div>
-                <p className="font-bold text-white">Pause café</p>
+                <p className="font-bold text-white">Pause café ☕</p>
                 <p className="text-xs text-gray-400">Navigation en pause</p>
               </div>
             </div>
-            <button onClick={() => { paused.current = false; setCoffee(false); }}
+            <button onClick={() => { pausedRef.current = false; setCoffee(false); }}
               className="w-full bg-amber-500 text-white font-bold py-3.5 rounded-2xl text-sm">
               ▶ Reprendre
             </button>

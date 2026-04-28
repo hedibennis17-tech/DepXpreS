@@ -7,26 +7,10 @@ const FROM      = process.env.TWILIO_FROM;
 const SGKEY     = process.env.SENDGRID_API_KEY;
 const FROM_EMAIL = process.env.FROM_EMAIL || "noreply@fastdep.ca";
 
-export async function sendSMS(to: string, msg: string): Promise<void> {
-  if (!SID || !TOKEN || !FROM || !to || to === "—") return;
-  try {
-    const phone = to.replace(/[\s\-\(\)\.]/g, "");
-    const formatted = phone.startsWith("+") ? phone : `+1${phone}`;
-    const r = await fetch(`https://api.twilio.com/2010-04-01/Accounts/${SID}/Messages.json`, {
-      method: "POST",
-      headers: {
-        "Authorization": "Basic " + Buffer.from(`${SID}:${TOKEN}`).toString("base64"),
-        "Content-Type": "application/x-www-form-urlencoded",
-      },
-      body: new URLSearchParams({ From: FROM, To: formatted, Body: msg }),
-    });
-    const result = await r.json();
-    if (result.status === "failed" || result.error_code) {
-      console.error("SMS failed:", result.error_message);
-    }
-  } catch (e) {
-    console.error("SMS exception:", e);
-  }
+// ⚠️ SMS TWILIO DÉSACTIVÉ — réactiver manuellement si nécessaire
+export async function sendSMS(_to: string, _msg: string): Promise<void> {
+  console.log("[SMS PAUSED] To:", _to, "|", _msg);
+  return; // SMS désactivé temporairement
 }
 
 const emailWrap = (inner: string) => `
