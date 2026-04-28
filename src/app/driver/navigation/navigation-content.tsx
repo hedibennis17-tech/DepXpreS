@@ -203,11 +203,32 @@ export default function NavigationContent() {
     const sName    = p.get("storeName") || "Store";
     const cName    = p.get("clientName") || p.get("client") || "Client";
 
+    // Si pas de coords — géocoder l'adresse du store
     if (!slat || !slng) {
-      setInstr("Coordonnées du store manquantes");
+      const sAddr = p.get("storeDest") || p.get("dest") || "";
+      if (!sAddr) { setInstr("Adresse du store manquante"); return; }
+      const g2 = window.google.maps;
+      const geo = new g2.Geocoder();
+      geo.geocode({ address: sAddr + ", Québec, Canada" }, (results: any, gStatus: string) => {
+        if (gStatus !== "OK" || !results?.length) {
+          setInstr("Impossible de localiser le store: " + sAddr);
+          return;
+        }
+        const loc = results[0].geometry.location;
+        drawAllRoutesWithCoords(origin, loc.lat(), loc.lng(), clat, clng, sName, cName, phase);
+      });
       return;
     }
+    drawAllRoutesWithCoords(origin, slat, slng, clat, clng, sName, cName, phase);
+  }
 
+  function drawAllRoutesWithCoords(
+    origin: {lat:number;lng:number},
+    slat: number, slng: number,
+    clat: number, clng: number,
+    sName: string, cName: string, phase: string
+  ) {
+    if (!mapObj.current || !window.google) return;
     const g = window.google.maps;
     const DS = new g.DirectionsService();
 
