@@ -23,6 +23,8 @@ export default function CheckoutContent() {
 
   const [user, setUser] = useState<FirebaseUser | null>(null);
   const [address, setAddress] = useState("");
+  const [city, setCity] = useState("Laval");
+  const [postalCode, setPostalCode] = useState("");
   const [apt, setApt] = useState("");
   const [instructions, setInstructions] = useState("");
   const [paymentMethod, setPaymentMethod] = useState("cash");
@@ -55,7 +57,7 @@ export default function CheckoutContent() {
 
     try {
       const orderNumber = `FDC-${Date.now().toString().slice(-6)}`;
-      const fullAddress = `${address.trim()}${apt ? `, Apt ${apt}` : ""}`;
+      const fullAddress = [address.trim(), apt ? `Apt ${apt}` : "", city.trim(), `QC ${postalCode.trim()}`].filter(Boolean).join(", ");
 
       // Récupérer les infos complètes du store (lat, lng, phone, zoneId)
       let storeData: Record<string, any> = {};
@@ -268,11 +270,20 @@ export default function CheckoutContent() {
                 <MapPin className="h-4 w-4 text-orange-500" /> Adresse de livraison
               </h2>
               <input value={address} onChange={e => setAddress(e.target.value)}
-                placeholder="Numéro et rue *"
+                placeholder="Numéro et rue ex: 422 13e Rue *"
                 className="w-full border border-gray-200 rounded-xl px-4 py-3 text-sm outline-none focus:border-orange-400 transition-colors" />
               <input value={apt} onChange={e => setApt(e.target.value)}
                 placeholder="Appartement, suite (optionnel)"
                 className="w-full border border-gray-200 rounded-xl px-4 py-3 text-sm outline-none focus:border-orange-400 transition-colors" />
+              <div className="grid grid-cols-2 gap-2">
+                <input value={city} onChange={e => setCity(e.target.value)}
+                  placeholder="Ville *"
+                  className="w-full border border-gray-200 rounded-xl px-4 py-3 text-sm outline-none focus:border-orange-400 transition-colors" />
+                <input value={postalCode} onChange={e => setPostalCode(e.target.value.toUpperCase())}
+                  placeholder="Code postal *"
+                  maxLength={7}
+                  className="w-full border border-gray-200 rounded-xl px-4 py-3 text-sm outline-none focus:border-orange-400 transition-colors" />
+              </div>
               <input value={instructions} onChange={e => setInstructions(e.target.value)}
                 placeholder="Instructions de livraison (optionnel)"
                 className="w-full border border-gray-200 rounded-xl px-4 py-3 text-sm outline-none focus:border-orange-400 transition-colors" />

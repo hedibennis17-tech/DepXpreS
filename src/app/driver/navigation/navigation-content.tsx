@@ -127,7 +127,11 @@ export default function NavigationContent() {
       });
       setReady(true);
 
-      // 3. Demander GPS du chauffeur
+      // 3. Réinitialiser les routes à chaque chargement de page
+      drawnRef.current = false;
+      steps.current = []; stepI.current = 0;
+
+      // 4. Demander GPS du chauffeur
       navigator.geolocation.getCurrentPosition(
         pos => {
           if (cancelled) return;
@@ -160,39 +164,19 @@ export default function NavigationContent() {
   function putDriverMarker(loc: {lat:number;lng:number}, hdg: number) {
     if (!mapObj.current || !window.google) return;
     const g = window.google.maps;
-    // Flèche Uber: pointe vers le haut, ancre au centre
-    const icon = {
-      path: "M 0,-2 L 1.2,1 L 0,0.2 L -1.2,1 Z",
-      scale: 22,
-      fillColor: "#f97316", fillOpacity: 1,
-      strokeColor: "#ffffff", strokeWeight: 2.5,
-      rotation: 0, // La carte tourne, pas la flèche
-      anchor: new g.Point(0, 0),
-    };
+    // Garder un marker invisible juste pour référencer la position
     if (!driverMk.current) {
-      driverMk.current = new g.Marker({ position: loc, map: mapObj.current, icon, zIndex: 20 });
+      driverMk.current = new g.Marker({
+        position: loc, map: mapObj.current, zIndex: 1,
+        icon: { path: g.SymbolPath.CIRCLE, scale: 0 },
+      });
     } else {
       driverMk.current.setPosition(loc);
     }
-    // Carte orientée dans la direction de conduite (heading-up)
-    // + flèche toujours au centre-bas de l'écran
-    if (hdg >= 0) {
-      mapObj.current.setHeading(hdg);
-    }
+    // Carte orientée selon la direction (heading-up) — la flèche CSS au centre reste fixe
+    if (hdg > 0) mapObj.current.setHeading(hdg);
     mapObj.current.setZoom(18);
-    // Offset: décaler le centre vers le haut pour que la flèche soit en bas
-    const projection = mapObj.current.getProjection();
-    if (projection) {
-      const latLng = new g.LatLng(loc.lat, loc.lng);
-      const point = projection.fromLatLngToPoint(latLng);
-      const scale = Math.pow(2, mapObj.current.getZoom()!);
-      const offsetY = 80 / scale; // pixels vers le haut
-      const newPoint = new g.Point(point.x, point.y - offsetY);
-      const newLatLng = projection.fromPointToLatLng(newPoint);
-      mapObj.current.panTo(newLatLng);
-    } else {
-      mapObj.current.panTo(loc);
-    }
+    mapObj.current.panTo(loc);
   }
 
   // ── Marqueur coloré ─────────────────────────────────────────────────────
@@ -401,6 +385,11 @@ export default function NavigationContent() {
     steps.current = []; stepI.current = 0;
     setInstr("Recalcul…"); setDistStep(""); setManeuver("");
     setDistStore(""); setDistClient(""); setDistTotal(""); setEta("");
+    // Supprimer les anciennes routes de la carte
+    if (mapObj.current) {
+      // Reset map heading
+      mapObj.current.setHeading(0);
+    }
     navigator.geolocation.getCurrentPosition(
       pos => drawAllRoutes({ lat: pos.coords.latitude, lng: pos.coords.longitude }),
       () => {},
@@ -554,8 +543,18 @@ export default function NavigationContent() {
           </div>
         )}
 
-        {/* La carte occupe tout — le marker GPS est au centre géo mais visuellement en bas grâce à l offset panTo */}
         <div ref={mapDiv} className="w-full h-full" />
+
+        {/* Flèche chauffeur FIXE au centre-bas — style Uber */}
+        {ready && (
+          <div className="absolute inset-0 pointer-events-none flex flex-col items-center justify-end pb-[30%]">
+            <div style={{ filter: "drop-shadow(0 2px 8px rgba(0,0,0,0.5))" }}>
+              <svg width="52" height="64" viewBox="0 0 52 64" fill="none">
+                <polygon points="26,4 48,58 26,44 4,58" fill="#f97316" stroke="white" strokeWidth="3" strokeLinejoin="round"/>
+              </svg>
+            </div>
+          </div>
+        )}
 
         {/* Légende */}
         {ready && (
