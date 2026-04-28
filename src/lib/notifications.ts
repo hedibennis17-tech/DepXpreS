@@ -96,86 +96,46 @@ export async function notifyAll(action: string, ctx: OrderCtx) {
 
   switch (action) {
 
-    // ── Nouvelle commande créée ───────────────────────────────────────────
+    // ── NOUVELLE COMMANDE : 1 SMS chauffeur + 1 SMS store (une seule fois) ──
     case "new_order":
-      // Store
+      // SMS chauffeur — alerte pour ouvrir l'app
+      if (driverPhone) await sendSMS(driverPhone,
+        `FastDép 🚗 Nouvelle commande #${orderNumber} assignée! Ouvrez l'app pour accepter.`);
+      // Email chauffeur
+      if (driverEmail) await sendEmail(driverEmail, driverName || "Chauffeur",
+        `🚗 Commande #${orderNumber} assignée`,
+        `<p>Bonjour <b>${driverName}</b>,</p><p>Une nouvelle commande vous a été assignée.</p><p>🏪 Récupérer: <b>${storeName}</b> — ${storeAddress}</p><p>📦 Livrer à: <b>${deliveryAddress}</b></p><p>Ouvrez l'app FastDép pour accepter.</p>`);
+      // SMS store — alerte pour préparer
       if (storePhone) await sendSMS(storePhone,
-        `FastDép 🛍️ Nouvelle commande #${orderNumber}! ${itemsSMS} | Livraison: ${deliveryAddress} | ${total?.toFixed(2)}$`);
-      if (storeEmail) await sendEmail(storeEmail, storeName, `🛍️ Nouvelle commande #${orderNumber}`,
-        `<p>Nouvelle commande à préparer :</p><ul>${itemsHtml}</ul><p>📍 Livraison: <b>${deliveryAddress}</b></p><p>💰 Total: <b>${total?.toFixed(2)}$</b></p>`);
-      // Client
-      if (clientPhone) await sendSMS(clientPhone,
-        `FastDép ✅ Commande #${orderNumber} confirmée! Livraison chez ${storeName} en préparation.`);
-      if (clientEmail) await sendEmail(clientEmail, clientName, `✅ Commande #${orderNumber} confirmée`,
-        `<p>Bonjour <b>${clientName}</b>,</p><p>Commande confirmée !</p><ul>${itemsHtml}</ul><p>📍 Livraison: <b>${deliveryAddress}</b></p><p>💰 Total: <b>${total?.toFixed(2)}$</b></p>`);
+        `FastDép 🛍️ Nouvelle commande #${orderNumber}! Un chauffeur est en route. Préparez: ${itemsSMS}`);
+      // Email store
+      if (storeEmail) await sendEmail(storeEmail, storeName,
+        `🛍️ Nouvelle commande #${orderNumber}`,
+        `<p>Nouvelle commande à préparer :</p><ul>${itemsHtml}</ul><p>📍 Livraison: <b>${deliveryAddress}</b></p><p>💰 Total: <b>${total?.toFixed(2)}$</b></p><p>Un chauffeur va récupérer la commande sous peu.</p>`);
+      // Email client seulement (pas de SMS client = pas de frais)
+      if (clientEmail) await sendEmail(clientEmail, clientName,
+        `✅ Commande #${orderNumber} confirmée`,
+        `<p>Bonjour <b>${clientName}</b>,</p><p>Votre commande est confirmée !</p><ul>${itemsHtml}</ul><p>📍 Livraison: <b>${deliveryAddress}</b></p><p>💰 Total: <b>${total?.toFixed(2)}$</b></p>`);
       break;
 
-    // ── Chauffeur assigné (par admin) ─────────────────────────────────────
+    // ── ASSIGNATION MANUELLE (même logique que new_order) ─────────────────
     case "assigned":
       if (driverPhone) await sendSMS(driverPhone,
-        `FastDép 🚗 Commande #${orderNumber} assignée! Récupérer: ${storeName} (${storeAddress}) → Livrer: ${deliveryAddress}`);
-      if (driverEmail) await sendEmail(driverEmail, driverName || "Chauffeur", `🚗 Commande #${orderNumber} assignée`,
-        `<p>Bonjour <b>${driverName}</b>,</p><p>Vous avez une nouvelle commande!</p><p>🏪 Ramasser: <b>${storeName}</b> — ${storeAddress}</p><p>📦 Livrer: <b>${deliveryAddress}</b></p><p>Client: ${clientName}</p>`);
+        `FastDép 🚗 Commande #${orderNumber} assignée! Ouvrez l'app pour accepter.`);
+      if (driverEmail) await sendEmail(driverEmail, driverName || "Chauffeur",
+        `🚗 Commande #${orderNumber} assignée`,
+        `<p>Bonjour <b>${driverName}</b>,</p><p>Une commande vous a été assignée.</p><p>🏪 Récupérer: <b>${storeName}</b> — ${storeAddress}</p><p>📦 Livrer: <b>${deliveryAddress}</b></p>`);
       if (storePhone) await sendSMS(storePhone,
-        `FastDép 🚗 Un chauffeur est assigné à la commande #${orderNumber}. Préparez la commande!`);
-      if (storeEmail) await sendEmail(storeEmail, storeName, `🚗 Chauffeur assigné — Commande #${orderNumber}`,
-        `<p>Un chauffeur (<b>${driverName}</b>) va récupérer la commande <b>#${orderNumber}</b>.</p><p>Préparez la commande pour la remise.</p>`);
+        `FastDép 🛍️ Commande #${orderNumber}! Un chauffeur arrive bientôt. Préparez: ${itemsSMS}`);
+      if (storeEmail) await sendEmail(storeEmail, storeName,
+        `🛍️ Commande #${orderNumber} — Chauffeur assigné`,
+        `<p>Un chauffeur (<b>${driverName}</b>) va récupérer la commande <b>#${orderNumber}</b>.</p><ul>${itemsHtml}</ul><p>Préparez la commande pour la remise.</p>`);
       break;
 
-    // ── Chauffeur accepte et part vers le store ───────────────────────────
-    case "accept":
-      if (storePhone) await sendSMS(storePhone,
-        `FastDép 🚗 Le chauffeur ${driverName || ""} est en route vers vous! Commande #${orderNumber} — Préparez-la!`);
-      if (storeEmail) await sendEmail(storeEmail, storeName, `🚗 Chauffeur en route — Commande #${orderNumber}`,
-        `<p>Le chauffeur <b>${driverName}</b> est en route vers votre commerce.</p><p>Commande <b>#${orderNumber}</b> — Veuillez la préparer pour la remise.</p>`);
-      if (clientPhone) await sendSMS(clientPhone,
-        `FastDép ✅ Votre commande #${orderNumber} est prise en charge par ${driverName || "un chauffeur"}!`);
-      if (clientEmail) await sendEmail(clientEmail, clientName, `✅ Commande #${orderNumber} en cours`,
-        `<p>Bonjour <b>${clientName}</b>,</p><p>Votre commande <b>#${orderNumber}</b> est prise en charge!</p><p>🚗 Chauffeur: <b>${driverName}</b></p>`);
-      break;
-
-    // ── Chauffeur arrivé au store ─────────────────────────────────────────
-    case "arrived_store":
-      if (storePhone) await sendSMS(storePhone,
-        `FastDép 🏪 Le chauffeur est arrivé à votre commerce! Commande #${orderNumber} — Remettez-lui la commande.`);
-      if (storeEmail) await sendEmail(storeEmail, storeName, `🏪 Chauffeur arrivé — Commande #${orderNumber}`,
-        `<p>Le chauffeur <b>${driverName}</b> est arrivé à votre commerce.</p><p>Veuillez lui remettre la commande <b>#${orderNumber}</b>.</p>`);
-      if (driverPhone) await sendSMS(driverPhone,
-        `FastDép 📍 Vous êtes arrivé chez ${storeName}. Récupérez la commande #${orderNumber}.`);
-      break;
-
-    // ── Commande récupérée → en route vers client ─────────────────────────
-    case "picked_up":
-      if (clientPhone) await sendSMS(clientPhone,
-        `FastDép 📦 Votre commande #${orderNumber} est en route! ${driverName ? `Chauffeur: ${driverName}` : ""} — Arrivée prévue bientôt.`);
-      if (clientEmail) await sendEmail(clientEmail, clientName, `📦 Commande #${orderNumber} en route!`,
-        `<p>Bonjour <b>${clientName}</b>,</p><p>Votre commande est en route!</p><p>📍 Livraison: <b>${deliveryAddress}</b></p><p>🚗 Chauffeur: <b>${driverName}</b></p>`);
-      if (storePhone) await sendSMS(storePhone,
-        `FastDép ✅ Commande #${orderNumber} récupérée par le chauffeur. Livraison en cours.`);
-      break;
-
-    // ── Chauffeur arrivé chez le client ───────────────────────────────────
-    case "arrived_client":
-      if (clientPhone) await sendSMS(clientPhone,
-        `FastDép 🏠 Votre chauffeur est arrivé! Commande #${orderNumber} — Ouvrez la porte!`);
-      if (clientEmail) await sendEmail(clientEmail, clientName, `🏠 Votre chauffeur est là! — #${orderNumber}`,
-        `<p>Bonjour <b>${clientName}</b>,</p><p>Votre chauffeur <b>${driverName}</b> est devant chez vous!</p><p>Commande <b>#${orderNumber}</b></p>`);
-      if (driverPhone) await sendSMS(driverPhone,
-        `FastDép 📍 Vous êtes arrivé chez ${clientName}. Commande #${orderNumber}.`);
-      break;
-
-    // ── Livraison complétée ───────────────────────────────────────────────
-    case "delivered":
-      if (clientPhone) await sendSMS(clientPhone,
-        `FastDép ✅ Commande #${orderNumber} livrée! Merci de choisir FastDép 🧡`);
-      if (clientEmail) await sendEmail(clientEmail, clientName, `✅ Commande #${orderNumber} livrée!`,
-        `<p>Bonjour <b>${clientName}</b>,</p><p>Votre commande <b>#${orderNumber}</b> a été livrée avec succès!</p><p>Merci de choisir FastDép 🧡</p>`);
-      if (storePhone) await sendSMS(storePhone,
-        `FastDép ✅ Commande #${orderNumber} livrée à ${clientName}. Transaction complétée.`);
-      if (storeEmail) await sendEmail(storeEmail, storeName, `✅ Commande #${orderNumber} livrée`,
-        `<p>La commande <b>#${orderNumber}</b> a été livrée avec succès à <b>${clientName}</b>.</p><p>Transaction complétée.</p>`);
-      if (driverPhone) await sendSMS(driverPhone,
-        `FastDép 🎉 Livraison #${orderNumber} complétée! Bravo.`);
+    // ── TOUTES LES AUTRES ÉTAPES : in-app seulement, pas de SMS ──────────
+    // (accept, arrived_store, picked_up, arrived_client, delivered)
+    // → Géré via Firestore notifications — 0 frais Twilio
+    default:
       break;
   }
 }
