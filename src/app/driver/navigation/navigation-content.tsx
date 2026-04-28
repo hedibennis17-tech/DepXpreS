@@ -105,11 +105,13 @@ export default function NavigationContent() {
       // 2. Créer la carte centrée sur Laval (fallback si pas de GPS)
       const g = window.google.maps;
       mapObj.current = new g.Map(mapDiv.current, {
-        zoom: 14,
-        center: { lat: 45.57, lng: -73.74 }, // Laval par défaut
+        zoom: 18,
+        center: { lat: 45.57, lng: -73.74 },
         mapTypeId: "roadmap",
         disableDefaultUI: true,
         gestureHandling: "greedy",
+        tilt: 45,
+        heading: 0,
         styles: [
           { elementType: "geometry", stylers: [{ color: "#1a1a2e" }] },
           { elementType: "labels.text.fill", stylers: [{ color: "#9ca3af" }] },
@@ -158,19 +160,38 @@ export default function NavigationContent() {
   function putDriverMarker(loc: {lat:number;lng:number}, hdg: number) {
     if (!mapObj.current || !window.google) return;
     const g = window.google.maps;
+    // Flèche Uber: pointe vers le haut, ancre au centre
     const icon = {
-      path: "M 0,-1.2 L 0.7,0.8 L 0,0.3 L -0.7,0.8 Z",
-      scale: 26,
+      path: "M 0,-2 L 1.2,1 L 0,0.2 L -1.2,1 Z",
+      scale: 22,
       fillColor: "#f97316", fillOpacity: 1,
-      strokeColor: "#ffffff", strokeWeight: 2,
-      rotation: hdg,
+      strokeColor: "#ffffff", strokeWeight: 2.5,
+      rotation: 0, // La carte tourne, pas la flèche
       anchor: new g.Point(0, 0),
     };
     if (!driverMk.current) {
       driverMk.current = new g.Marker({ position: loc, map: mapObj.current, icon, zIndex: 20 });
     } else {
       driverMk.current.setPosition(loc);
-      driverMk.current.setIcon(icon);
+    }
+    // Carte orientée dans la direction de conduite (heading-up)
+    // + flèche toujours au centre-bas de l'écran
+    if (hdg >= 0) {
+      mapObj.current.setHeading(hdg);
+    }
+    mapObj.current.setZoom(18);
+    // Offset: décaler le centre vers le haut pour que la flèche soit en bas
+    const projection = mapObj.current.getProjection();
+    if (projection) {
+      const latLng = new g.LatLng(loc.lat, loc.lng);
+      const point = projection.fromLatLngToPoint(latLng);
+      const scale = Math.pow(2, mapObj.current.getZoom()!);
+      const offsetY = 80 / scale; // pixels vers le haut
+      const newPoint = new g.Point(point.x, point.y - offsetY);
+      const newLatLng = projection.fromPointToLatLng(newPoint);
+      mapObj.current.panTo(newLatLng);
+    } else {
+      mapObj.current.panTo(loc);
     }
   }
 
@@ -297,7 +318,16 @@ export default function NavigationContent() {
         setEta(leg1.duration.text);
       }
 
+      // Montrer tous les points 3 secondes puis revenir en mode conduite
       mapObj.current.fitBounds(bounds, { top: 120, bottom: 220, left: 30, right: 30 });
+      setTimeout(() => {
+        if (!mapObj.current || !driverMk.current) return;
+        const pos = driverMk.current.getPosition();
+        if (pos) {
+          mapObj.current.setZoom(18);
+          mapObj.current.panTo(pos);
+        }
+      }, 4000);
     });
   }
 
@@ -524,6 +554,7 @@ export default function NavigationContent() {
           </div>
         )}
 
+        {/* La carte occupe tout — le marker GPS est au centre géo mais visuellement en bas grâce à l offset panTo */}
         <div ref={mapDiv} className="w-full h-full" />
 
         {/* Légende */}
