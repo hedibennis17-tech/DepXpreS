@@ -99,16 +99,55 @@ export async function PATCH(req: NextRequest, { params }: { params: { orderId: s
 
     await adminDb.collection("orders").doc(orderId).update(updateData);
 
-    // Notif chauffeur
+    // Notif chauffeur + SMS + Email lors d'une assignation
     if (driverId && status === "assigned") {
       const { FieldValue } = await import("firebase-admin/firestore");
+      const { notifyAll } = await import("@/lib/notifications");
+
+      // Notif in-app
       await adminDb.collection("notifications").add({
         userId: driverId, userType: "driver", type: "new_order",
         title: "🚗 Nouvelle commande assignée",
         body: `Une commande vous a été assignée. Ouvrez l'app pour accepter.`,
-        orderId, read: false,
-        createdAt: FieldValue.serverTimestamp(),
+        orderId, read: false, createdAt: FieldValue.serverTimestamp(),
       });
+
+      // Récupérer les données de la commande + chauffeur + store pour SMS/Email
+      try {
+        const [orderDoc, driverProfileDoc, driverUserDoc] = await Promise.all([
+          adminDb.collection("orders").doc(orderId).get(),
+          adminDb.collection("driver_profiles").doc(driverId).get(),
+          adminDb.collection("app_users").doc(driverId).get(),
+        ]);
+        const o  = orderDoc.data() || {};
+        const dp = driverProfileDoc.data() || {};
+        const du = driverUserDoc.data() || {};
+
+        const storeDoc = await adminDb.collection("stores").doc(o.storeId || "").get();
+        const sd = storeDoc.data() || {};
+        const clientDoc = await adminDb.collection("app_users").doc(o.clientId || "").get();
+        const cd = clientDoc.data() || {};
+
+        await notifyAll("assigned", {
+          orderNumber:     o.orderNumber || orderId.slice(-6),
+          orderId,
+          storeName:       o.storeName || sd.name || "Store",
+          storeAddress:    o.storeAddress || "",
+          storePhone:      o.storePhone || sd.phone || sd.ownerPhone || "",
+          storeEmail:      sd.email || sd.ownerEmail || sd.contactEmail || "",
+          clientName:      o.clientName || "Client",
+          clientPhone:     o.clientPhone || "",
+          clientEmail:     cd.email || "",
+          deliveryAddress: o.deliveryAddress || "",
+          driverName:      driverName || dp.full_name || du.display_name || "Chauffeur",
+          driverPhone:     dp.phone || dp.phoneNumber || du.phone || "",
+          driverEmail:     du.email || dp.email || "",
+          total:           o.total,
+          items:           o.items,
+        });
+      } catch (e) {
+        console.error("Notification error on assign:", e);
+      }
     }
 
     return NextResponse.json({ ok: true });
