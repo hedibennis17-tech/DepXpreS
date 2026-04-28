@@ -1,6 +1,6 @@
 "use client";
 import { useState, useEffect, useRef } from "react";
-import { useRouter, useSearchParams } from "next/navigation";
+import { useRouter } from "next/navigation";
 import { auth, db } from "@/lib/firebase";
 import { onAuthStateChanged } from "firebase/auth";
 import { doc, updateDoc, serverTimestamp } from "firebase/firestore";
@@ -40,26 +40,44 @@ function stripHtml(s: string) {
 }
 
 function loadGoogleMaps(): Promise<void> {
-  return new Promise((resolve) => {
+  return new Promise((resolve, reject) => {
+    // Déjà chargé
     if (window.google?.maps?.Map) { resolve(); return; }
+
+    // Script déjà dans le DOM — attendre qu'il finisse
     if (document.querySelector("#gmaps-nav")) {
-      const check = setInterval(() => {
-        if (window.google?.maps?.Map) { clearInterval(check); resolve(); }
-      }, 100);
+      const t = setInterval(() => {
+        if (window.google?.maps?.Map) { clearInterval(t); resolve(); }
+      }, 150);
+      setTimeout(() => { clearInterval(t); reject(new Error("Google Maps timeout")); }, 15000);
       return;
     }
-    (window as any).__navResolve = resolve;
+
+    // Callback unique pour ce chargement
+    const cbName = "__gmapsNavCb_" + Date.now();
+    (window as any)[cbName] = () => {
+      delete (window as any)[cbName];
+      resolve();
+    };
+
     const s = document.createElement("script");
     s.id = "gmaps-nav";
-    s.src = `https://maps.googleapis.com/maps/api/js?key=${GMAPS_KEY}&libraries=geometry&callback=__navResolve`;
     s.async = true;
+    s.onerror = () => reject(new Error("Impossible de charger Google Maps. Vérifiez votre connexion."));
+    s.src = `https://maps.googleapis.com/maps/api/js?key=${GMAPS_KEY}&libraries=geometry&callback=${cbName}&loading=async`;
     document.head.appendChild(s);
+
+    setTimeout(() => reject(new Error("Google Maps timeout après 15s")), 15000);
   });
 }
 
 export default function NavigationContent() {
   const router = useRouter();
-  const sp = useSearchParams();
+  // Parser les params directement depuis window.location pour éviter les problèmes async
+  const getParam = (key: string, fallback = "") => {
+    if (typeof window === "undefined") return fallback;
+    return new URLSearchParams(window.location.search).get(key) || fallback;
+  };
   const mapDiv = useRef<HTMLDivElement>(null);
   const map = useRef<any>(null);
   const driverMarker = useRef<any>(null);
@@ -71,6 +89,7 @@ export default function NavigationContent() {
   const uid = useRef("");
 
   const [ready, setReady] = useState(false);
+  const [mapError, setMapError] = useState("");
   const [muteUI, setMuteUI] = useState(false);
   const [heading, setHeading] = useState(0);
   const [maneuver, setManeuver] = useState("");
@@ -86,19 +105,33 @@ export default function NavigationContent() {
   const [coffee, setCoffee] = useState(false);
   const paused = useRef(false);
 
-  // Params URL
-  const phase      = (sp.get("phase") || "pickup") as "pickup"|"dropoff";
-  const orderId    = sp.get("orderId") || "";
-  const storeName  = sp.get("storeName") || "Commerce";
-  const storeLat   = parseFloat(sp.get("storeLat") || sp.get("lat") || "0");
-  const storeLng   = parseFloat(sp.get("storeLng") || sp.get("lng") || "0");
-  const storePhone = sp.get("storePhone") || "";
-  const storeDest  = sp.get("storeDest") || sp.get("dest") || "";
-  const clientName = sp.get("clientName") || sp.get("client") || "Client";
-  const clientLat  = parseFloat(sp.get("clientLat") || "0");
-  const clientLng  = parseFloat(sp.get("clientLng") || "0");
-  const clientDest = sp.get("clientDest") || "";
-  const clientPhone= sp.get("clientPhone") || sp.get("phone") || "";
+  // Params URL — lus une seule fois au mount
+  const [navParams] = useState(() => {
+    if (typeof window === "undefined") return {
+      phase: "pickup" as "pickup"|"dropoff", orderId: "",
+      storeName: "Commerce", storeLat: 0, storeLng: 0,
+      storePhone: "", storeDest: "",
+      clientName: "Client", clientLat: 0, clientLng: 0,
+      clientDest: "", clientPhone: "",
+    };
+    const p = new URLSearchParams(window.location.search);
+    return {
+      phase:       (p.get("phase") || "pickup") as "pickup"|"dropoff",
+      orderId:     p.get("orderId") || "",
+      storeName:   p.get("storeName") || "Commerce",
+      storeLat:    parseFloat(p.get("storeLat") || p.get("lat") || "0"),
+      storeLng:    parseFloat(p.get("storeLng") || p.get("lng") || "0"),
+      storePhone:  p.get("storePhone") || "",
+      storeDest:   p.get("storeDest") || p.get("dest") || "",
+      clientName:  p.get("clientName") || p.get("client") || "Client",
+      clientLat:   parseFloat(p.get("clientLat") || "0"),
+      clientLng:   parseFloat(p.get("clientLng") || "0"),
+      clientDest:  p.get("clientDest") || "",
+      clientPhone: p.get("clientPhone") || p.get("phone") || "",
+    };
+  });
+  const { phase, orderId, storeName, storeLat, storeLng, storePhone, storeDest,
+          clientName, clientLat, clientLng, clientDest, clientPhone } = navParams;
   const isPickup   = phase === "pickup";
   const activeColor= isPickup ? "#3b82f6" : "#22c55e";
   const destLabel  = isPickup ? storeName : clientName;
@@ -116,7 +149,12 @@ export default function NavigationContent() {
     let cancelled = false;
 
     async function init() {
-      await loadGoogleMaps();
+      try {
+        await loadGoogleMaps();
+      } catch (e: any) {
+        if (!cancelled) setMapError(e.message || "Erreur de chargement de la carte");
+        return;
+      }
       if (cancelled || !mapDiv.current) return;
 
       // Créer la carte
@@ -487,11 +525,27 @@ export default function NavigationContent() {
 
       {/* ══ CARTE ══ */}
       <div className="flex-1 relative overflow-hidden">
-        {!ready && (
+        {!ready && !mapError && (
           <div className="absolute inset-0 flex items-center justify-center bg-[#0f0f0f] z-10">
             <div className="text-center">
               <Loader2 className="h-8 w-8 animate-spin text-orange-500 mx-auto mb-3" />
               <p className="text-gray-400 text-sm">Chargement navigation…</p>
+              <p className="text-gray-600 text-xs mt-1">Connexion GPS en cours</p>
+            </div>
+          </div>
+        )}
+        {mapError && (
+          <div className="absolute inset-0 flex items-center justify-center bg-[#0f0f0f] z-10">
+            <div className="text-center px-6">
+              <div className="w-14 h-14 rounded-2xl bg-red-500/20 flex items-center justify-center mx-auto mb-4">
+                <AlertTriangle className="h-7 w-7 text-red-400" />
+              </div>
+              <p className="text-white font-bold mb-2">Carte non disponible</p>
+              <p className="text-gray-400 text-sm mb-4">{mapError}</p>
+              <button onClick={() => { setMapError(""); setReady(false); }}
+                className="px-5 py-2.5 bg-orange-500 text-white rounded-xl text-sm font-bold">
+                Réessayer
+              </button>
             </div>
           </div>
         )}
