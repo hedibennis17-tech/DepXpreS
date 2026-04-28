@@ -4,7 +4,7 @@ import { useCart } from "@/context/CartContext";
 import { useRouter, useSearchParams } from "next/navigation";
 import { auth, db } from "@/lib/firebase";
 import { onAuthStateChanged, User as FirebaseUser } from "firebase/auth";
-import { collection, addDoc, serverTimestamp, doc, getDoc } from "firebase/firestore";
+import { collection, addDoc, serverTimestamp, doc, getDoc, writeBatch } from "firebase/firestore";
 import Link from "next/link";
 import {
   ArrowLeft, MapPin, Clock, CreditCard, Package,
@@ -54,35 +54,71 @@ export default function CheckoutContent() {
     setError(""); setProcessing(true);
 
     try {
-      // Générer numéro de commande
-      const orderNumber = `DEP-${Date.now().toString().slice(-6)}`;
+      const orderNumber = `FDC-${Date.now().toString().slice(-6)}`;
+      const fullAddress = `${address.trim()}${apt ? `, Apt ${apt}` : ""}`;
 
-      // Créer la commande dans Firestore
-      const orderRef = await addDoc(collection(db, "orders"), {
+      // Récupérer les infos complètes du store (lat, lng, phone, zoneId)
+      let storeData: Record<string, any> = {};
+      if (cart.storeId) {
+        const storeDoc = await getDoc(doc(db, "stores", cart.storeId));
+        if (storeDoc.exists()) storeData = storeDoc.data();
+      }
+
+      // Récupérer le profil client complet
+      let clientData: Record<string, any> = {};
+      if (user?.uid) {
+        const clientDoc = await getDoc(doc(db, "app_users", user.uid));
+        if (clientDoc.exists()) clientData = clientDoc.data();
+      }
+
+      const mappedItems = cart.items.map(i => ({
+        productId: i.id,
+        name: i.name,
+        price: i.price,
+        qty: i.qty,
+        imageUrl: i.imageUrl || "",
+        categoryName: i.categoryName || "",
+        subtotal: i.price * i.qty,
+      }));
+
+      // Doc principal de la commande — tous les champs nécessaires
+      const orderPayload = {
         orderNumber,
-        clientId: user?.uid,
-        clientEmail: user?.email,
-        clientName: user?.displayName || user?.email,
-        storeId: cart.storeId,
-        storeName: cart.storeName,
-        items: cart.items.map(i => ({
-          productId: i.id,
-          name: i.name,
-          price: i.price,
-          qty: i.qty,
-          imageUrl: i.imageUrl || "",
-          categoryName: i.categoryName || "",
-          subtotal: i.price * i.qty,
-        })),
-        deliveryAddress: `${address.trim()}${apt ? `, Apt ${apt}` : ""}`,
+        source: "client_app",
+        // Client
+        clientId: user?.uid || "",
+        clientEmail: user?.email || "",
+        clientName: clientData.display_name || clientData.full_name || user?.displayName || user?.email || "",
+        clientPhone: clientData.phone || clientData.phoneNumber || "",
+        clientPhotoUrl: clientData.photoURL || user?.photoURL || "",
+        // Store
+        storeId: cart.storeId || "",
+        storeName: storeData.name || cart.storeName || "",
+        storeAddress: storeData.address || "",
+        storePhone: storeData.phone || "",
+        storeLat: storeData.lat || storeData.latitude || null,
+        storeLng: storeData.lng || storeData.longitude || null,
+        // Zone
+        zoneId: storeData.zoneId || "",
+        zoneName: storeData.zoneName || "",
+        // Articles (sauvés dans le doc ET sous-collection)
+        items: mappedItems,
+        itemCount: cart.count,
+        // Livraison
+        deliveryAddress: fullAddress,
+        deliveryLat: null,
+        deliveryLng: null,
         deliveryInstructions: instructions,
+        deliveryFee: DELIVERY_FEE,
+        estimatedDelivery: 30,
+        // Paiement
         paymentMethod,
+        paymentStatus: "pending",
         promoCode: promoCode || null,
         notes,
         // Montants
         subtotal,
         discount,
-        deliveryFee: DELIVERY_FEE,
         tps,
         tvq,
         total,
@@ -90,14 +126,53 @@ export default function CheckoutContent() {
         status: "pending",
         createdAt: serverTimestamp(),
         updatedAt: serverTimestamp(),
-        estimatedDelivery: 30,
+      };
+
+      // 1. Créer la commande principale
+      const orderRef = await addDoc(collection(db, "orders"), orderPayload);
+
+      // 2. Sauvegarder les articles dans la sous-collection (pour l'admin)
+      const batch = writeBatch(db);
+      mappedItems.forEach(item => {
+        const itemRef = doc(collection(db, "orders", orderRef.id, "items"));
+        batch.set(itemRef, { ...item, orderId: orderRef.id, createdAt: serverTimestamp() });
       });
+
+      // 3. Ajouter dans dispatch_queue pour le dispatch automatique
+      const dispatchRef = doc(collection(db, "dispatch_queue"));
+      batch.set(dispatchRef, {
+        orderId: orderRef.id,
+        orderNumber,
+        storeId: cart.storeId || "",
+        storeName: storeData.name || cart.storeName || "",
+        storeAddress: storeData.address || "",
+        storeLat: storeData.lat || storeData.latitude || null,
+        storeLng: storeData.lng || storeData.longitude || null,
+        clientId: user?.uid || "",
+        clientName: clientData.display_name || user?.displayName || user?.email || "",
+        clientPhone: clientData.phone || "",
+        deliveryAddress: fullAddress,
+        zoneId: storeData.zoneId || "",
+        zoneName: storeData.zoneName || "",
+        total,
+        itemCount: cart.count,
+        paymentMethod,
+        dispatchStatus: "queued",
+        priority: 1,
+        attempts: 0,
+        source: "client_app",
+        createdAt: serverTimestamp(),
+        updatedAt: serverTimestamp(),
+      });
+
+      await batch.commit();
 
       setOrderId(orderRef.id);
       cart.clear();
       setSuccess(true);
 
     } catch (e) {
+      console.error("Checkout error:", e);
       setError(e instanceof Error ? e.message : "Erreur lors de la commande. Réessayez.");
     } finally {
       setProcessing(false);

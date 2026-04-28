@@ -384,23 +384,32 @@ export default function OrderDetailPage({ params }: { params: Promise<{ orderId:
                     <p className="text-sm text-muted-foreground text-center py-4">Aucun article</p>
                   ) : (
                     <div className="space-y-3">
-                      {items.map((item) => (
-                        <div key={item.id} className="flex items-center justify-between py-2 border-b last:border-0">
-                          <div>
-                            <div className="flex items-center gap-2">
-                              <span className="font-medium text-sm">{item.productName}</span>
-                              {item.requiresAgeVerification && (
-                                <Badge variant="outline" className="text-xs border-orange-300 text-orange-600 px-1 py-0">18+</Badge>
-                              )}
+                      {items.map((item) => {
+                        const name = item.productName || item.name || "Article";
+                        const qty = item.quantity || item.qty || 1;
+                        const price = item.unitPrice || item.price || 0;
+                        const sub = item.lineSubtotal || item.subtotal || (price * qty);
+                        const img = item.imageUrl || item.image || "";
+                        return (
+                          <div key={item.id} className="flex items-center gap-3 py-2 border-b last:border-0">
+                            {img ? (
+                              <img src={img} alt={name} className="w-12 h-12 rounded-lg object-cover shrink-0 border" />
+                            ) : (
+                              <div className="w-12 h-12 rounded-lg bg-gray-100 flex items-center justify-center shrink-0">
+                                <Package className="w-5 h-5 text-gray-400" />
+                              </div>
+                            )}
+                            <div className="flex-1 min-w-0">
+                              <p className="font-medium text-sm truncate">{name}</p>
+                              {item.categoryName && <p className="text-xs text-muted-foreground">{item.categoryName}</p>}
                             </div>
-                            {item.categoryName && <span className="text-xs text-muted-foreground">{item.categoryName}</span>}
+                            <div className="text-right shrink-0">
+                              <p className="text-sm font-medium">{qty} × ${price.toFixed(2)}</p>
+                              <p className="text-sm text-muted-foreground">${sub.toFixed(2)}</p>
+                            </div>
                           </div>
-                          <div className="text-right ml-4">
-                            <p className="text-sm font-medium">{item.quantity} × ${(item.unitPrice || 0).toFixed(2)}</p>
-                            <p className="text-sm text-muted-foreground">= ${(item.lineSubtotal || 0).toFixed(2)}</p>
-                          </div>
-                        </div>
-                      ))}
+                        );
+                      })}
                     </div>
                   )}
                 </CardContent>
@@ -467,7 +476,7 @@ export default function OrderDetailPage({ params }: { params: Promise<{ orderId:
             <CardContent>
               {client ? (
                 <div className="space-y-2 text-sm">
-                  <p className="font-semibold">{(client.firstName as string)} {(client.lastName as string)}</p>
+                  <p className="font-semibold">{(client.firstName as string) || (client.display_name as string) || (client.full_name as string) || (order.clientName as string) || "—"} {(client.lastName as string) || ""}</p>
                   <div className="flex items-center gap-2 text-muted-foreground">
                     <Mail className="h-3 w-3" /><span className="truncate">{(client.email as string) || "—"}</span>
                   </div>

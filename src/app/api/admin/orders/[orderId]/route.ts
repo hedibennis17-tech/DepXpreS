@@ -27,15 +27,43 @@ export async function GET(
       ? null
       : { id: paymentSnap.docs[0].id, ...serializeDoc(paymentSnap.docs[0].data()) };
 
-    // Fetch client profile
+    // Fetch client profile — cherche dans app_users ET client_profiles
     let client = null;
-    if ((order as Record<string, unknown>).clientId) {
-      const clientDoc = await adminDb
-        .collection("client_profiles")
-        .doc((order as Record<string, unknown>).clientId as string)
-        .get();
-      if (clientDoc.exists) {
-        client = { id: clientDoc.id, ...serializeDoc(clientDoc.data()!) };
+    const clientId = (order as any).clientId;
+    if (clientId) {
+      // 1. Chercher dans app_users (commandes client app)
+      const appUserDoc = await adminDb.collection("app_users").doc(clientId).get();
+      if (appUserDoc.exists) {
+        const u = appUserDoc.data()!;
+        client = {
+          id: appUserDoc.id,
+          firstName: u.display_name || u.full_name || u.firstName || (order as any).clientName || "",
+          lastName: u.lastName || "",
+          email: u.email || (order as any).clientEmail || "",
+          phone: u.phone || u.phoneNumber || (order as any).clientPhone || "",
+          photoURL: u.photoURL || "",
+          totalOrders: u.totalOrders || 0,
+          ...serializeDoc(u),
+        };
+      } else {
+        // 2. Fallback client_profiles
+        const clientDoc = await adminDb.collection("client_profiles").doc(clientId).get();
+        if (clientDoc.exists) {
+          client = { id: clientDoc.id, ...serializeDoc(clientDoc.data()!) };
+        } else {
+          // 3. Fallback: construire depuis les champs de la commande
+          const o = order as any;
+          if (o.clientName || o.clientEmail) {
+            client = {
+              id: clientId,
+              firstName: o.clientName || "",
+              lastName: "",
+              email: o.clientEmail || "",
+              phone: o.clientPhone || "",
+              totalOrders: 0,
+            };
+          }
+        }
       }
     }
 
