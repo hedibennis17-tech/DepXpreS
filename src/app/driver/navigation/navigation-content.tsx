@@ -399,10 +399,20 @@ export default function NavigationContent() {
 
   async function updateFS(loc: {lat:number;lng:number}, hdg: number) {
     if (!uidRef.current) return;
+    const p = new URLSearchParams(window.location.search);
+    const orderId = p.get("orderId") || "";
     try {
+      // 1. Mettre à jour le profil chauffeur
       await updateDoc(doc(db, "driver_profiles", uidRef.current), {
         last_lat: loc.lat, last_lng: loc.lng, heading: hdg, updatedAt: serverTimestamp(),
       });
+      // 2. Mettre à jour la commande pour le suivi client en temps réel
+      if (orderId) {
+        await updateDoc(doc(db, "orders", orderId), {
+          driverLat: loc.lat, driverLng: loc.lng, driverHeading: hdg,
+          driverLastSeen: serverTimestamp(),
+        });
+      }
     } catch {}
   }
 
