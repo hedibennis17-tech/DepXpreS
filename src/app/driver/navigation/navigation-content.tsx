@@ -87,6 +87,8 @@ export default function NavigationContent() {
   const [arrived,   setArrived]   = useState(false);
   const [confirming,setConfirming]= useState(false);
   const [coffee,    setCoffee]    = useState(false);
+  const [vehicle,   setVehicle]   = useState<"car"|"moto"|"bike">("car");
+  const [showVehicle, setShowVehicle] = useState(false);
 
   useEffect(() => {
     return onAuthStateChanged(auth, u => { if (u) uidRef.current = u.uid; });
