@@ -41,7 +41,7 @@ export async function GET(req: NextRequest) {
         email: userData.email || data.email || "—",
         phone: data.phone || userData.phone || "—",
         status: data.application_status || "draft",
-        isOnline: data.driver_status === "online",
+        isOnline: data.isOnline === true || data.driver_status === "online" || data.online === true || data.is_online === true,
         driver_status: data.driver_status || "offline",
         zone: data.current_zone_id || "—",
         rating: data.rating_average || 0,
