@@ -591,8 +591,8 @@ export default function OrderDetailPage({ params }: { params: Promise<{ orderId:
                 className={cn("flex items-center justify-between p-3 rounded-lg border cursor-pointer transition-colors",
                   selectedDriver === d.id ? "border-blue-500 bg-blue-50 dark:bg-blue-900/20" : "hover:bg-muted/50")}>
                 <div>
-                  <p className="font-medium text-sm">{d.firstName} {d.lastName}</p>
-                  <p className="text-xs text-muted-foreground">⭐ {d.rating?.toFixed(1) || "—"} · {d.totalDeliveries || 0} livraisons</p>
+                  <p className="font-medium text-sm">{d.name || (d.firstName ? `${d.firstName} ${d.lastName || ""}` : "Chauffeur")}</p>
+                  <p className="text-xs text-muted-foreground">⭐ {d.rating?.toFixed(1) || "0.0"} · {d.totalDeliveries || d.deliveriesToday || 0} livraisons {d.vehicle ? `· ${d.vehicle}` : ""}</p>
                 </div>
                 <Badge className="text-xs bg-green-100 text-green-700 border-0">Disponible</Badge>
               </div>
