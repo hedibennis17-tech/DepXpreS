@@ -1,5 +1,5 @@
 "use client";
-import { useState, useEffect } from "react";
+import { useState, useEffect, useRef } from "react";
 import { useCart } from "@/context/CartContext";
 import { useRouter, useSearchParams } from "next/navigation";
 import { auth, db } from "@/lib/firebase";
@@ -25,8 +25,12 @@ export default function CheckoutContent() {
   const [address, setAddress] = useState("");
   const [city, setCity] = useState("Laval");
   const [postalCode, setPostalCode] = useState("");
+  const [deliveryLat, setDeliveryLat] = useState<number | null>(null);
+  const [deliveryLng, setDeliveryLng] = useState<number | null>(null);
   const [apt, setApt] = useState("");
   const [instructions, setInstructions] = useState("");
+  const addressInputRef = useRef<HTMLInputElement>(null);
+  const autocompleteRef = useRef<any>(null);
   const [paymentMethod, setPaymentMethod] = useState("cash");
   const [notes, setNotes] = useState("");
   const [processing, setProcessing] = useState(false);
@@ -108,8 +112,8 @@ export default function CheckoutContent() {
         itemCount: cart.count,
         // Livraison
         deliveryAddress: fullAddress,
-        deliveryLat: null,
-        deliveryLng: null,
+        deliveryLat: deliveryLat,
+        deliveryLng: deliveryLng,
         deliveryInstructions: instructions,
         deliveryFee: DELIVERY_FEE,
         estimatedDelivery: 30,
@@ -269,9 +273,21 @@ export default function CheckoutContent() {
               <h2 className="text-sm font-bold text-gray-900 flex items-center gap-2">
                 <MapPin className="h-4 w-4 text-orange-500" /> Adresse de livraison
               </h2>
-              <input value={address} onChange={e => setAddress(e.target.value)}
-                placeholder="Numéro et rue ex: 422 13e Rue *"
-                className="w-full border border-gray-200 rounded-xl px-4 py-3 text-sm outline-none focus:border-orange-400 transition-colors" />
+              {/* Autocomplete Google Places */}
+              <div className="relative">
+                <MapPin className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-gray-400 pointer-events-none" />
+                <input
+                  ref={addressInputRef}
+                  value={address}
+                  onChange={e => { setAddress(e.target.value); setDeliveryLat(null); setDeliveryLng(null); }}
+                  placeholder="Rechercher votre adresse…"
+                  autoComplete="off"
+                  className="w-full border border-gray-200 rounded-xl pl-9 pr-4 py-3 text-sm outline-none focus:border-orange-400 transition-colors"
+                />
+                {deliveryLat && (
+                  <span className="absolute right-3 top-1/2 -translate-y-1/2 text-green-500 text-xs font-bold">✓ GPS</span>
+                )}
+              </div>
               <input value={apt} onChange={e => setApt(e.target.value)}
                 placeholder="Appartement, suite (optionnel)"
                 className="w-full border border-gray-200 rounded-xl px-4 py-3 text-sm outline-none focus:border-orange-400 transition-colors" />
@@ -284,8 +300,13 @@ export default function CheckoutContent() {
                   maxLength={7}
                   className="w-full border border-gray-200 rounded-xl px-4 py-3 text-sm outline-none focus:border-orange-400 transition-colors" />
               </div>
+              {deliveryLat && deliveryLng && (
+                <p className="text-xs text-green-600 flex items-center gap-1">
+                  ✅ Adresse géolocalisée — le GPS calculera la distance exacte
+                </p>
+              )}
               <input value={instructions} onChange={e => setInstructions(e.target.value)}
-                placeholder="Instructions de livraison (optionnel)"
+                placeholder="Instructions ex: Sonner à la porte, code: 1234"
                 className="w-full border border-gray-200 rounded-xl px-4 py-3 text-sm outline-none focus:border-orange-400 transition-colors" />
             </div>
 
