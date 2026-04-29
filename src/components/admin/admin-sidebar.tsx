@@ -139,6 +139,7 @@ const menuItems = [
         { label: "Réassignations", href: "/admin/dispatch/reassignments" },
         { label: "Historique", href: "/admin/dispatch/history" },
         { label: "Carte live", href: "/admin/dispatch/live-map" },
+        { label: "🔴 Suivi Live", href: "/admin/dispatch/live" },
     ]
   },
   {

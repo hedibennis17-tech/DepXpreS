@@ -1,4 +1,5 @@
 "use client";
+import LiveOrderTracker from "@/components/admin/LiveOrderTracker";
 
 import { useState, useEffect, use } from "react";
 import { useRouter } from "next/navigation";
@@ -288,6 +289,7 @@ export default function OrderDetailPage({ params }: { params: Promise<{ orderId:
               <TabsTrigger value="summary">Résumé</TabsTrigger>
               <TabsTrigger value="items">Articles ({items.length})</TabsTrigger>
               <TabsTrigger value="timeline">Timeline ({history.length})</TabsTrigger>
+              <TabsTrigger value="live" className="text-orange-600 font-bold">🔴 Suivi Live</TabsTrigger>
             </TabsList>
 
             <TabsContent value="summary" className="space-y-4 mt-4">
@@ -462,6 +464,12 @@ export default function OrderDetailPage({ params }: { params: Promise<{ orderId:
                 </CardContent>
               </Card>
             </TabsContent>
+
+            {/* ── Onglet Suivi Live ── */}
+            <TabsContent value="live" className="mt-4">
+              <LiveOrderTracker orderId={orderId} />
+            </TabsContent>
+
           </Tabs>
         </div>
 
