@@ -28,7 +28,13 @@ export default function DriverLayout({ children }: { children: React.ReactNode }
 
   useEffect(() => {
     if (isPublicPage) { setLoading(false); return; }
+    // Timeout 8s — si Firebase IndexedDB bloqué, débloquer quand même
+    const timeout = setTimeout(() => {
+      setLoading(false);
+      router.push("/driver/login");
+    }, 8000);
     const unsub = onAuthStateChanged(auth, async (u) => {
+      clearTimeout(timeout);
       if (!u) { router.push("/driver/login"); return; }
       try {
         // Appels Firestore en parallele — 2x plus rapide
@@ -53,7 +59,7 @@ export default function DriverLayout({ children }: { children: React.ReactNode }
       } catch {}
       finally { setLoading(false); }
     });
-    return () => unsub();
+    return () => { unsub(); clearTimeout(timeout); };
   }, [router, isPublicPage]);
 
   // Afficher login/signup directement sans header ni nav
