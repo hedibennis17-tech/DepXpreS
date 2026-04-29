@@ -121,17 +121,13 @@ function OrderCard({ order, active }: { order: Order; active: boolean }) {
             </div>
           </div>
           {active && (
-            <div className="mt-3 flex gap-2">
-              <Button size="sm" variant="outline" asChild className="flex-1 h-8 text-xs">
-                <Link href={`/client/track/${order.id}`}>
-                  <MapPin className="h-3 w-3 mr-1" /> Suivre
-                </Link>
-              </Button>
-              <Button size="sm" asChild className="flex-1 h-8 text-xs bg-orange-500 hover:bg-orange-600">
-                <Link href={`/client/orders/${order.id}`}>
-                  Détails <ChevronRight className="h-3 w-3 ml-1" />
-                </Link>
-              </Button>
+            <div className="mt-3 space-y-2">
+              <Link href={`/client/track/${order.id}`} className="block w-full bg-[#1a6b3a] hover:bg-[#15592f] text-white font-bold py-3 rounded-xl text-sm text-center flex items-center justify-center gap-2 transition-colors">
+                🛵 Suivre ma commande en temps réel →
+              </Link>
+              <Link href={`/client/orders/${order.id}`} className="block w-full text-center text-xs text-gray-400 py-1">
+                Voir les détails
+              </Link>
             </div>
           )}
         </Link>

@@ -2,7 +2,7 @@
 import { useState, useEffect, useRef } from "react";
 import { auth, db } from "@/lib/firebase";
 import { onAuthStateChanged, User as FirebaseUser } from "firebase/auth";
-import { collection, query, getDocs, limit } from "firebase/firestore";
+import { collection, query, getDocs, limit, where, onSnapshot } from "firebase/firestore";
 import { ACTIVE_ZONES, getNeighborZones, searchZones, type DeliveryZone } from "@/lib/delivery-zones";
 import Link from "next/link";
 import {
@@ -116,6 +116,7 @@ export default function ClientHome() {
   const [searchResults,setSearchResults]= useState<any[]>([]);
   const [searching,    setSearching]    = useState(false);
   const [activeCat,    setActiveCat]    = useState("all");
+  const [activeOrder,  setActiveOrder]  = useState<{id:string;status:string;storeName:string;driverName?:string} | null>(null);
   const searchRef = useRef<HTMLDivElement>(null);
   const catRef    = useRef<HTMLDivElement>(null);
 
@@ -123,6 +124,26 @@ export default function ClientHome() {
     const unsub = onAuthStateChanged(auth, u=>setUser(u));
     return ()=>unsub();
   },[]);
+
+  // Surveiller commande active du client
+  useEffect(()=>{
+    if (!user?.uid) { setActiveOrder(null); return; }
+    const q = query(
+      collection(db, "orders"),
+      where("clientId", "==", user.uid),
+      where("status", "in", ["pending","assigned","navigating_pickup","arrived_store","picked_up","navigating_dropoff","arrived_client"]),
+      limit(1)
+    );
+    const unsub = onSnapshot(q, (s: any) => {
+      if (!s.empty) {
+        const d = s.docs[0].data();
+        setActiveOrder({ id: s.docs[0].id, status: d.status, storeName: d.storeName || "Store", driverName: d.driverName });
+      } else {
+        setActiveOrder(null);
+      }
+    });
+    return () => unsub();
+  }, [user?.uid]);
 
   useEffect(()=>{
     async function load() {
@@ -235,8 +256,39 @@ export default function ClientHome() {
   const bio = products.filter(p=>p.isOrganic);
   const frozen = products.filter(p=>p.isFrozen);
 
+  const STATUS_BANNER: Record<string, string> = {
+    pending: "⏳ Commande reçue — en attente",
+    assigned: "🚗 Chauffeur assigné à votre commande",
+    navigating_pickup: "🗺️ Le chauffeur est en route vers le store",
+    arrived_store: "🏪 Le chauffeur est au commerce",
+    picked_up: "📦 Commande récupérée — en route vers vous!",
+    navigating_dropoff: "🚀 Le chauffeur arrive chez vous!",
+    arrived_client: "📍 Le chauffeur est devant chez vous!",
+  };
+
   return (
     <div className="min-h-screen pb-24 md:pb-0" style={{background:"#f8f9fb"}}>
+
+      {/* ── Bannière commande active (style Uber Eats) ── */}
+      {activeOrder && (
+        <a href={"/client/track/" + activeOrder.id} className="block">
+          <div className="bg-[#1a6b3a] text-white px-4 py-3 flex items-center gap-3">
+            <div className="w-8 h-8 rounded-xl bg-white/20 flex items-center justify-center shrink-0">
+              <span className="text-base">🛵</span>
+            </div>
+            <div className="flex-1 min-w-0">
+              <p className="text-xs font-black uppercase tracking-wide text-green-200">Commande en cours</p>
+              <p className="text-sm font-bold truncate">{STATUS_BANNER[activeOrder.status] || "Voir ma commande"}</p>
+              {activeOrder.driverName && (
+                <p className="text-xs text-green-200 truncate">Chauffeur: {activeOrder.driverName}</p>
+              )}
+            </div>
+            <div className="shrink-0 bg-white/20 rounded-xl px-3 py-1.5">
+              <span className="text-xs font-black">Suivre →</span>
+            </div>
+          </div>
+        </a>
+      )}
       <style>{`
         @import url('https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;600;700;800&display=swap');
         body{font-family:'Plus Jakarta Sans',sans-serif;}
