@@ -1,7 +1,8 @@
 "use client";
 import { useState, useEffect } from "react";
-import { auth } from "@/lib/firebase";
+import { auth, db } from "@/lib/firebase";
 import { onAuthStateChanged, User as FirebaseUser } from "firebase/auth";
+import { collection, query, where, orderBy, onSnapshot, limit } from "firebase/firestore";
 import { useRouter } from "next/navigation";
 import { Card, CardContent } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
@@ -16,6 +17,8 @@ interface Order {
   total: number;
   items_count: number;
   created_at: string;
+  orderNumber?: string;
+  driverName?: string;
   estimated_delivery?: string;
 }
 
@@ -41,15 +44,45 @@ export default function ClientOrdersPage() {
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
-    const unsub = onAuthStateChanged(auth, async (u) => {
+    const unsub = onAuthStateChanged(auth, (u) => {
       if (!u) { router.push("/client/login"); return; }
       setUser(u);
-      try {
-        const res = await fetch(`/api/client/orders?uid=${u.uid}`);
-        const data = await res.json();
-        setOrders(data.orders || []);
-      } catch {}
-      setLoading(false);
+
+      // Firestore realtime — plus besoin de l'API
+      const q = query(
+        collection(db, "orders"),
+        where("clientId", "==", u.uid),
+        limit(50)
+      );
+      const unsubOrders = onSnapshot(q, snap => {
+        const list = snap.docs.map(d => {
+          const data = d.data();
+          let created_at = "";
+          if (data.createdAt) {
+            try {
+              if (typeof data.createdAt === "string") created_at = new Date(data.createdAt).toLocaleDateString("fr-CA");
+              else if (data.createdAt.toDate) created_at = data.createdAt.toDate().toLocaleDateString("fr-CA");
+              else if (data.createdAt._seconds) created_at = new Date(data.createdAt._seconds * 1000).toLocaleDateString("fr-CA");
+            } catch {}
+          }
+          return {
+            id: d.id,
+            store_name: data.storeName || data.store_name || "Dépanneur",
+            status: data.status || "pending",
+            total: Number(data.total) || 0,
+            items_count: Array.isArray(data.items) ? data.items.length : (data.itemCount || 0),
+            created_at,
+            orderNumber: data.orderNumber || d.id.slice(-6).toUpperCase(),
+            driverName: data.driverName || null,
+          } as Order;
+        });
+        // Trier par date décroissante
+        list.sort((a, b) => b.created_at.localeCompare(a.created_at));
+        setOrders(list);
+        setLoading(false);
+      }, () => setLoading(false));
+
+      return () => unsubOrders();
     });
     return () => unsub();
   }, [router]);

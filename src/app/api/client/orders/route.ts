@@ -1,34 +1,64 @@
 export const runtime = "nodejs";
 import { NextRequest, NextResponse } from "next/server";
 import { adminDb } from "@/lib/firebase-admin";
-import { serializeDoc, serializeDocs } from "@/lib/firestore-serialize";
 
 export async function GET(req: NextRequest) {
   const uid = req.nextUrl.searchParams.get("uid");
   const limit = parseInt(req.nextUrl.searchParams.get("limit") || "50");
   if (!uid) return NextResponse.json({ error: "uid required" }, { status: 400 });
+
   try {
-    const snap = await adminDb.collection("orders")
-      .where("clientId", "==", uid)
-      .orderBy("createdAt", "desc")
-      .limit(limit)
-      .get();
-    const orders = snap.docs.map(doc => {
-      const d = serializeDoc(doc.data());
+    // Essai 1: avec orderBy
+    let snap;
+    try {
+      snap = await adminDb.collection("orders")
+        .where("clientId", "==", uid)
+        .orderBy("createdAt", "desc")
+        .limit(limit)
+        .get();
+    } catch {
+      // Fallback sans orderBy si index manquant
+      snap = await adminDb.collection("orders")
+        .where("clientId", "==", uid)
+        .limit(limit)
+        .get();
+    }
+
+    const orders = snap.docs.map(d => {
+      const data = d.data();
+      // Gérer createdAt en tant que Timestamp Firestore OU string ISO
+      let createdAt = "";
+      if (data.createdAt) {
+        if (typeof data.createdAt === "string") {
+          createdAt = new Date(data.createdAt).toLocaleDateString("fr-CA");
+        } else if (data.createdAt._seconds) {
+          createdAt = new Date(data.createdAt._seconds * 1000).toLocaleDateString("fr-CA");
+        } else if (data.createdAt.toDate) {
+          createdAt = data.createdAt.toDate().toLocaleDateString("fr-CA");
+        }
+      }
+
       return {
-        id: doc.id,
-        store_name: d.storeName || d.store_name || "Dépanneur",
-        status: d.status || "pending",
-        total: Number(d.total) || 0,
-        items_count: Array.isArray(d.items) ? d.items.length : 0,
-        created_at: d.createdAt ? new Date(d.createdAt as string).toLocaleDateString("fr-CA") : "",
-        estimated_delivery: d.estimatedDelivery || null,
+        id: d.id,
+        store_name: data.storeName || data.store_name || "Dépanneur",
+        status: data.status || "pending",
+        total: Number(data.total) || 0,
+        items_count: Array.isArray(data.items) ? data.items.length : (data.itemCount || 0),
+        created_at: createdAt,
+        orderNumber: data.orderNumber || d.id.slice(-6).toUpperCase(),
+        driverName: data.driverName || null,
+        deliveryAddress: data.deliveryAddress || "",
+        estimatedDelivery: data.estimatedDelivery || null,
       };
     });
+
+    // Trier côté serveur si pas d'orderBy
+    orders.sort((a, b) => b.created_at.localeCompare(a.created_at));
+
     return NextResponse.json({ orders });
   } catch (err) {
     console.error("Orders GET error:", err);
-    return NextResponse.json({ orders: [] });
+    return NextResponse.json({ orders: [], error: String(err) });
   }
 }
 
@@ -48,26 +78,12 @@ export async function POST(req: NextRequest) {
     const calcTvq = tvq ?? Math.round(taxable * TVQ_RATE * 100) / 100;
     const calcTotal = total ?? Math.round((taxable + calcTps + calcTvq) * 100) / 100;
     const ref = await adminDb.collection("orders").add({
-      clientId,
-      clientName: clientName || "",
-      clientEmail: clientEmail || "",
-      clientPhone: clientPhone || "",
-      storeId,
-      storeName: storeName || "",
-      items,
-      subtotal: calcSubtotal,
-      deliveryFee: calcDelivery,
-      tps: calcTps,
-      tvq: calcTvq,
-      total: calcTotal,
-      deliveryAddress: deliveryAddress || "",
-      deliveryLat: deliveryLat || null,
-      deliveryLng: deliveryLng || null,
-      notes: notes || "",
-      paymentMethod: paymentMethod || "cash",
-      status: "pending",
-      createdAt: new Date().toISOString(),
-      updatedAt: new Date().toISOString(),
+      clientId, clientName: clientName || "", clientEmail: clientEmail || "", clientPhone: clientPhone || "",
+      storeId, storeName: storeName || "", items, subtotal: calcSubtotal, deliveryFee: calcDelivery,
+      tps: calcTps, tvq: calcTvq, total: calcTotal,
+      deliveryAddress: deliveryAddress || "", deliveryLat: deliveryLat || null, deliveryLng: deliveryLng || null,
+      notes: notes || "", paymentMethod: paymentMethod || "cash",
+      status: "pending", createdAt: new Date().toISOString(), updatedAt: new Date().toISOString(),
     });
     return NextResponse.json({ success: true, order_id: ref.id });
   } catch (err) {
