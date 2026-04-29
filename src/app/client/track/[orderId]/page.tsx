@@ -78,20 +78,38 @@ export default function TrackOrderPage() {
 
   // ── Auth + Firestore realtime ─────────────────────────────────────────
   useEffect(() => {
+    // Timeout de sécurité — si Firebase tarde, débloquer après 8s
+    const timeout = setTimeout(() => setLoading(false), 8000);
+
     const unsub = onAuthStateChanged(auth, u => {
-      if (!u) { router.push("/client/login"); return; }
-      const unsubOrder = onSnapshot(doc(db, "orders", orderId), snap => {
-        if (snap.exists()) {
-          setOrder({ id: snap.id, ...snap.data() });
-          if (snap.data()?.status === "delivered" && !ratingDone) {
-            setTimeout(() => setShowRating(true), 2000);
-          }
-        }
+      if (!u) {
+        clearTimeout(timeout);
         setLoading(false);
-      });
+        router.push("/client/login");
+        return;
+      }
+      const unsubOrder = onSnapshot(
+        doc(db, "orders", orderId),
+        snap => {
+          clearTimeout(timeout);
+          if (snap.exists()) {
+            const data = snap.data();
+            setOrder({ id: snap.id, ...data });
+            if (data?.status === "delivered" && !ratingDone) {
+              setTimeout(() => setShowRating(true), 2000);
+            }
+          }
+          setLoading(false);
+        },
+        err => {
+          console.error("onSnapshot error:", err);
+          clearTimeout(timeout);
+          setLoading(false);
+        }
+      );
       return () => unsubOrder();
     });
-    return () => unsub();
+    return () => { unsub(); clearTimeout(timeout); };
   }, [orderId]);
 
   // ── Init carte ─────────────────────────────────────────────────────────
@@ -233,11 +251,16 @@ export default function TrackOrderPage() {
 
   if (loading) return (
     <div className="min-h-screen bg-[#f8f8f8] flex items-center justify-center">
-      <div className="text-center">
+      <div className="text-center px-6">
         <div className="w-12 h-12 rounded-2xl bg-orange-500 flex items-center justify-center mx-auto mb-3 animate-pulse">
           <Zap className="h-6 w-6 text-white fill-white" />
         </div>
         <p className="text-gray-500 text-sm">Chargement du suivi…</p>
+        <p className="text-gray-400 text-xs mt-2">Connexion à Firebase en cours</p>
+        <button onClick={() => window.location.reload()}
+          className="mt-4 px-4 py-2 bg-orange-500 text-white rounded-xl text-xs font-bold">
+          Actualiser
+        </button>
       </div>
     </div>
   );
