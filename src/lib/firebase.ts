@@ -1,6 +1,6 @@
 import { initializeApp, getApps, getApp } from "firebase/app";
-import { getFirestore, initializeFirestore, persistentLocalCache, persistentMultipleTabManager, memoryLocalCache } from "firebase/firestore";
-import { getAuth, initializeAuth, browserLocalPersistence, browserSessionPersistence, inMemoryPersistence, indexedDBLocalPersistence } from "firebase/auth";
+import { getFirestore } from "firebase/firestore";
+import { getAuth, browserLocalPersistence, setPersistence } from "firebase/auth";
 import { getStorage } from "firebase/storage";
 
 const firebaseConfig = {
@@ -14,43 +14,13 @@ const firebaseConfig = {
 
 const app = getApps().length ? getApp() : initializeApp(firebaseConfig);
 
-// ── Auth — fallback si IndexedDB bloqué (mode privé, Samsung Browser, etc.) ──
-function initAuth() {
-  try {
-    return initializeAuth(app, {
-      persistence: [
-        indexedDBLocalPersistence,
-        browserLocalPersistence,
-        browserSessionPersistence,
-      ],
-    });
-  } catch {
-    // initializeAuth déjà appelé — récupérer l'instance existante
-    return getAuth(app);
-  }
-}
-
-// ── Firestore — fallback memory si IndexedDB bloqué ──────────────────────────
-function initDb() {
-  try {
-    return initializeFirestore(app, {
-      localCache: persistentLocalCache({
-        tabManager: persistentMultipleTabManager(),
-      }),
-    });
-  } catch {
-    try {
-      // Fallback: memory cache si persistance bloquée
-      return initializeFirestore(app, {
-        localCache: memoryLocalCache(),
-      });
-    } catch {
-      return getFirestore(app);
-    }
-  }
-}
-
-export const auth = initAuth();
-export const db = initDb();
+export const auth = getAuth(app);
+export const db = getFirestore(app);
 export const storage = getStorage(app);
+
+// Force localStorage — évite IndexedDB qui plante sur Firefox/mode privé
+if (typeof window !== "undefined") {
+  setPersistence(auth, browserLocalPersistence).catch(() => {});
+}
+
 export default app;
