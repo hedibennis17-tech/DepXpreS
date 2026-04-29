@@ -46,6 +46,51 @@ export default function CheckoutContent() {
     return () => unsub();
   }, [router]);
 
+  // ── Google Places Autocomplete ──────────────────────────────────────
+  useEffect(() => {
+    function init() {
+      if (!addressInputRef.current || autocompleteRef.current) return;
+      const g = (window as any).google?.maps?.places;
+      if (!g) return;
+      const ac = new g.Autocomplete(addressInputRef.current, {
+        types: ["address"],
+        componentRestrictions: { country: "ca" },
+        fields: ["address_components", "geometry", "formatted_address"],
+      });
+      ac.addListener("place_changed", () => {
+        const place = ac.getPlace();
+        if (!place?.geometry) return;
+        let num = "", route = "", cityVal = "", postal = "";
+        for (const c of place.address_components || []) {
+          if (c.types[0] === "street_number") num = c.long_name;
+          if (c.types[0] === "route") route = c.long_name;
+          if (c.types[0] === "locality") cityVal = c.long_name;
+          if (c.types[0] === "postal_code") postal = c.long_name;
+        }
+        setAddress([num, route].filter(Boolean).join(" ") || place.formatted_address || "");
+        if (cityVal) setCity(cityVal);
+        if (postal) setPostalCode(postal);
+        setDeliveryLat(place.geometry.location.lat());
+        setDeliveryLng(place.geometry.location.lng());
+      });
+      autocompleteRef.current = ac;
+    }
+    if ((window as any).google?.maps?.places) { init(); return; }
+    const existing = document.getElementById("gmaps-places-sdk");
+    if (existing) {
+      const t = setInterval(() => {
+        if ((window as any).google?.maps?.places) { clearInterval(t); init(); }
+      }, 150);
+      return () => clearInterval(t);
+    }
+    const cb = "__gmP" + Date.now();
+    (window as any)[cb] = () => { delete (window as any)[cb]; init(); };
+    const s = document.createElement("script");
+    s.id = "gmaps-places-sdk";
+    s.src = "https://maps.googleapis.com/maps/api/js?key=AIzaSyAmDwm43D52jpgDp1MiNg_TvLBn_fDTsU8&libraries=places&callback=" + cb;
+    document.head.appendChild(s);
+  }, []);
+
   // Calculs
   const subtotal = cart.total;
   const discount = promoCode === "DEPXPRES1" ? subtotal * 0.1 : 0;
