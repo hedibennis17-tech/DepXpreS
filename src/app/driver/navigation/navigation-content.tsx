@@ -105,13 +105,15 @@ export default function NavigationContent() {
       // 2. Créer la carte centrée sur Laval (fallback si pas de GPS)
       const g = window.google.maps;
       mapObj.current = new g.Map(mapDiv.current, {
-        zoom: 18,
+        zoom: 17,
         center: { lat: 45.57, lng: -73.74 },
         mapTypeId: "roadmap",
         disableDefaultUI: true,
         gestureHandling: "greedy",
         tilt: 45,
         heading: 0,
+        rotateControl: false,
+        fullscreenControl: false,
         styles: [
           { elementType: "geometry", stylers: [{ color: "#1a1a2e" }] },
           { elementType: "labels.text.fill", stylers: [{ color: "#9ca3af" }] },
@@ -164,7 +166,7 @@ export default function NavigationContent() {
   function putDriverMarker(loc: {lat:number;lng:number}, hdg: number) {
     if (!mapObj.current || !window.google) return;
     const g = window.google.maps;
-    // Garder un marker invisible juste pour référencer la position
+    // Marker invisible pour tracker la position
     if (!driverMk.current) {
       driverMk.current = new g.Marker({
         position: loc, map: mapObj.current, zIndex: 1,
@@ -173,10 +175,14 @@ export default function NavigationContent() {
     } else {
       driverMk.current.setPosition(loc);
     }
-    // Carte orientée selon la direction (heading-up) — la flèche CSS au centre reste fixe
-    if (hdg > 0) mapObj.current.setHeading(hdg);
-    mapObj.current.setZoom(18);
-    mapObj.current.panTo(loc);
+    // moveCamera: heading + center + tilt + zoom atomique — seule façon fiable sur mobile
+    const validHeading = (hdg > 0 && hdg < 360) ? hdg : 0;
+    mapObj.current.moveCamera({
+      center: loc,
+      zoom: 18,
+      tilt: 45,
+      heading: validHeading,
+    });
   }
 
   // ── Marqueur coloré ─────────────────────────────────────────────────────
@@ -335,9 +341,7 @@ export default function NavigationContent() {
         const loc = { lat: pos.coords.latitude, lng: pos.coords.longitude };
         const hdg = pos.coords.heading ?? 0;
         setHeading(hdg);
-        putDriverMarker(loc, hdg);
-        if (hdg > 5) mapObj.current?.setHeading(hdg);
-        mapObj.current?.panTo(loc);
+        putDriverMarker(loc, hdg); // moveCamera inside handles everything
         updateFS(loc, hdg);
         advanceStep(loc);
       },
@@ -555,12 +559,19 @@ export default function NavigationContent() {
 
         <div ref={mapDiv} className="w-full h-full" />
 
-        {/* Flèche chauffeur FIXE au centre-bas — style Uber */}
+        {/* Flèche chauffeur FIXE au centre-bas — la CARTE tourne, pas la flèche */}
         {ready && (
-          <div className="absolute inset-0 pointer-events-none flex flex-col items-center justify-end pb-[30%]">
-            <div style={{ filter: "drop-shadow(0 2px 8px rgba(0,0,0,0.5))" }}>
-              <svg width="52" height="64" viewBox="0 0 52 64" fill="none">
-                <polygon points="26,4 48,58 26,44 4,58" fill="#f97316" stroke="white" strokeWidth="3" strokeLinejoin="round"/>
+          <div className="absolute inset-0 pointer-events-none flex flex-col items-center justify-end pb-[28%]">
+            <div style={{ position: "relative", width: 70, height: 70, display: "flex", alignItems: "center", justifyContent: "center" }}>
+              {/* Halo */}
+              <div style={{
+                position: "absolute", inset: 0, borderRadius: "50%",
+                background: "rgba(249,115,22,0.2)",
+                border: "2px solid rgba(249,115,22,0.4)",
+              }} />
+              <svg width="44" height="56" viewBox="0 0 44 56" fill="none"
+                style={{ filter: "drop-shadow(0 3px 10px rgba(0,0,0,0.8))", position: "relative", zIndex: 1 }}>
+                <polygon points="22,2 40,50 22,36 4,50" fill="#f97316" stroke="white" strokeWidth="2.5" strokeLinejoin="round"/>
               </svg>
             </div>
           </div>
@@ -586,14 +597,43 @@ export default function NavigationContent() {
           </div>
         )}
 
-        {/* Boussole */}
+        {/* Boussole — clic pour revenir Nord-up */}
         {ready && (
-          <button onClick={() => mapObj.current?.setHeading(0)}
-            className="absolute top-3 right-3 w-10 h-10 rounded-full bg-black/70 flex items-center justify-center border border-white/10">
-            <div style={{ transform: `rotate(${-heading}deg)`, transition: "transform 0.4s" }}>
-              <Navigation className="h-5 w-5 text-red-400" />
+          <button
+            onClick={() => mapObj.current?.moveCamera({ heading: 0, tilt: 45, zoom: 17 })}
+            className="absolute top-3 right-3 w-12 h-12 rounded-full bg-black/80 flex flex-col items-center justify-center border border-white/15 gap-0.5"
+            title="Réorienter vers le nord">
+            <div style={{ transform: `rotate(${-heading}deg)`, transition: "transform 0.3s" }}>
+              <svg width="20" height="20" viewBox="0 0 20 20">
+                <polygon points="10,2 13,10 10,8 7,10" fill="#ef4444"/>
+                <polygon points="10,18 13,10 10,12 7,10" fill="white"/>
+              </svg>
             </div>
+            <span className="text-[8px] text-gray-400 font-bold">N</span>
           </button>
+        )}
+
+        {/* Sélecteur véhicule */}
+        {ready && (
+          <button onClick={() => setShowVehicle(v => !v)}
+            className="absolute top-3 left-3 w-12 h-12 rounded-full bg-black/80 flex items-center justify-center border border-white/15 text-xl"
+            title="Changer de véhicule">
+            {vehicle === "car" ? "🚗" : vehicle === "moto" ? "🏍️" : "🚲"}
+          </button>
+        )}
+
+        {/* Menu véhicule */}
+        {showVehicle && (
+          <div className="absolute top-16 left-3 bg-[#1a1a1a] rounded-2xl border border-white/10 overflow-hidden z-20">
+            {(["car","moto","bike"] as const).map(v => (
+              <button key={v} onClick={() => { setVehicle(v); setShowVehicle(false); }}
+                className={`flex items-center gap-3 px-4 py-3 w-full text-left text-sm transition-colors ${vehicle === v ? "bg-orange-500/20 text-orange-400" : "text-gray-300 hover:bg-white/5"}`}>
+                <span className="text-xl">{v === "car" ? "🚗" : v === "moto" ? "🏍️" : "🚲"}</span>
+                <span className="font-medium">{v === "car" ? "Voiture" : v === "moto" ? "Moto" : "Vélo / Bixi"}</span>
+                {vehicle === v && <span className="ml-auto text-orange-400">✓</span>}
+              </button>
+            ))}
+          </div>
         )}
       </div>
 
