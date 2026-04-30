@@ -57,11 +57,18 @@ export default function DriverOrders() {
       );
       const unsubO = onSnapshot(q, snap=>{
         const activeStatuses = ["assigned","navigating_pickup","arrived_store","picked_up","navigating_dropoff","arrived_client","delivered"];
-        setOrders(snap.docs
+        const list = snap.docs
           .map(d=>({id:d.id,...d.data()} as Order))
-          .filter(o => activeStatuses.includes(o.status))
-        );
+          .filter(o => activeStatuses.includes(o.status));
+        setOrders(list);
         setLoading(false);
+        // Sauvegarder commande active en localStorage (récupération après reconnexion)
+        const active = list.find(o => !["delivered","cancelled","rated"].includes(o.status));
+        if (active) {
+          localStorage.setItem("activeOrderId", active.id);
+        } else {
+          localStorage.removeItem("activeOrderId");
+        }
       });
       return ()=>unsubO();
     });

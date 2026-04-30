@@ -337,6 +337,32 @@ export default function NewOrderPage() {
               required
               city=""
             />
+            {/* Ville + Code postal affichés et éditables */}
+            {deliveryAddressObj && (
+              <div className="grid grid-cols-2 gap-3">
+                <div>
+                  <label className="text-xs font-semibold text-muted-foreground mb-1 block">Ville</label>
+                  <input
+                    type="text"
+                    value={deliveryAddressObj.city || ""}
+                    onChange={e => setDeliveryAddressObj(prev => prev ? {...prev, city: e.target.value} : prev)}
+                    placeholder="Laval"
+                    className="w-full rounded-lg border border-input bg-background px-3 py-2 text-sm"
+                  />
+                </div>
+                <div>
+                  <label className="text-xs font-semibold text-muted-foreground mb-1 block">Code postal</label>
+                  <input
+                    type="text"
+                    value={deliveryAddressObj.postalCode || ""}
+                    onChange={e => setDeliveryAddressObj(prev => prev ? {...prev, postalCode: e.target.value.toUpperCase()} : prev)}
+                    placeholder="H7V 1A1"
+                    maxLength={7}
+                    className="w-full rounded-lg border border-input bg-background px-3 py-2 text-sm uppercase"
+                  />
+                </div>
+              </div>
+            )}
             {/* Type livraison */}
             <div>
               <label className="text-sm font-medium mb-2 block">Type de livraison</label>

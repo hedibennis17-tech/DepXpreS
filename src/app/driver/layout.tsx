@@ -124,7 +124,16 @@ export default function DriverLayout({ children }: { children: React.ReactNode }
               </Link>
             ))}
             <div className="border-t border-white/5">
-              <button onClick={async () => { await signOut(auth); router.push("/driver/login"); }}
+              <button onClick={async () => {
+                // Vérifier si une commande est en cours
+                const activeOrderId = localStorage.getItem("activeOrderId");
+                if (activeOrderId) {
+                  const confirm = window.confirm("⚠️ Vous avez une livraison en cours! Si vous vous déconnectez, la commande restera assignée à vous. Continuer?");
+                  if (!confirm) return;
+                }
+                await signOut(auth);
+                router.push("/driver/login");
+              }}
                 className="w-full flex items-center gap-3 px-4 py-3 hover:bg-red-500/5 text-gray-500 hover:text-red-400 transition-colors">
                 <LogOut className="h-4 w-4" />
                 <span className="text-sm font-medium">Déconnexion</span>
