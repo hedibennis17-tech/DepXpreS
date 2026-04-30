@@ -22,6 +22,7 @@ export default function DriverLayout({ children }: { children: React.ReactNode }
   const [loading, setLoading] = useState(true);
   const [menuOpen, setMenuOpen] = useState(false);
   const [online, setOnline] = useState(false);
+  const [hasActiveOrder, setHasActiveOrder] = useState(false);
 
   // Pages publiques — pas besoin d'auth
   const isPublicPage = ["/driver/login", "/driver/signup"].some(p => pathname.startsWith(p));
