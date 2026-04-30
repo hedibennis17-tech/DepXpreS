@@ -149,12 +149,44 @@ export async function POST(req: NextRequest) {
     }
 
     else if (action === "delivered") {
+      const deliveredAt = new Date();
       await adminDb.collection("orders").doc(orderId).update({
         status: "delivered",
         deliveredAt: FieldValue.serverTimestamp(),
         deliveryPhotoUrl: photoUrl || null,
         updatedAt: FieldValue.serverTimestamp(),
+        // Enregistrer les gains du chauffeur sur la commande
+        driverFee: Math.round((o.deliveryFee || 5) * 0.80 * 100) / 100,
+        platformFee: Math.round((o.deliveryFee || 5) * 0.20 * 100) / 100,
       });
+
+      // ── Enregistrement automatique de toutes les transactions ──────────
+      const { recordDeliveryTransactions } = await import("@/lib/transactions");
+      try {
+        const result = await recordDeliveryTransactions({
+          orderId,
+          orderNumber: ctx.orderNumber,
+          driverId,
+          driverName: ctx.driverName || "Chauffeur",
+          clientId: o.clientId || "",
+          clientName: ctx.clientName,
+          storeId: o.storeId || "",
+          storeName: ctx.storeName,
+          subtotal: Number(o.subtotal) || 0,
+          deliveryFee: Number(o.deliveryFee) || 5,
+          tip: Number(o.tip) || 0,
+          tps: Number(o.tps) || 0,
+          tvq: Number(o.tvq) || 0,
+          total: Number(o.total) || 0,
+          paymentMethod: o.paymentMethod || "cash",
+          deliveredAt,
+        });
+        console.log("✅ Transactions enregistrées:", result);
+      } catch (txErr) {
+        console.error("❌ Erreur transactions:", txErr);
+        // Ne pas bloquer la livraison si transactions échouent
+      }
+
       await Promise.all([
         addNotif(o.clientId, "client", "order_delivered", "✅ Commande livrée!", `#${ctx.orderNumber} livrée. Merci!`, orderId),
         addNotif(o.storeId,  "store",  "order_completed", "✅ Commande complétée", `#${ctx.orderNumber} livrée à ${ctx.clientName}`, orderId),

@@ -1,126 +1,127 @@
 "use client";
 import { useState, useEffect } from "react";
-import { auth } from "@/lib/firebase";
-import { onAuthStateChanged, User as FirebaseUser } from "firebase/auth";
+import { auth, db } from "@/lib/firebase";
+import { onAuthStateChanged } from "firebase/auth";
+import { collection, query, where, orderBy, limit, onSnapshot, doc } from "firebase/firestore";
 import { useRouter } from "next/navigation";
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
-import { Badge } from "@/components/ui/badge";
-import { Separator } from "@/components/ui/separator";
-import { Wallet, Star, TrendingUp, TrendingDown, Loader2, Plus, ArrowUpRight, ArrowDownLeft } from "lucide-react";
-
-interface Transaction {
-  id: string;
-  type: "credit" | "debit";
-  amount: number;
-  description: string;
-  date: string;
-}
+import { Wallet, Star, ArrowDownLeft, Package, Loader2, Gift } from "lucide-react";
 
 export default function ClientWalletPage() {
   const router = useRouter();
-  const [user, setUser] = useState<FirebaseUser | null>(null);
   const [loading, setLoading] = useState(true);
-  const [balance, setBalance] = useState(0);
-  const [loyaltyPoints, setLoyaltyPoints] = useState(0);
-  const [transactions, setTransactions] = useState<Transaction[]>([]);
+  const [wallet, setWallet] = useState<any>(null);
+  const [transactions, setTransactions] = useState<any[]>([]);
 
   useEffect(() => {
-    const unsub = onAuthStateChanged(auth, async (u) => {
+    const unsub = onAuthStateChanged(auth, u => {
       if (!u) { router.push("/client/login"); return; }
-      setUser(u);
-      try {
-        const res = await fetch(`/api/client/wallet?uid=${u.uid}`);
-        const data = await res.json();
-        setBalance(data.balance || 0);
-        setLoyaltyPoints(data.loyalty_points || 0);
-        setTransactions(data.transactions || []);
-      } catch {}
-      setLoading(false);
+
+      // Wallet temps réel
+      const unsubW = onSnapshot(doc(db, "wallets", u.uid), snap => {
+        if (snap.exists()) setWallet(snap.data());
+        setLoading(false);
+      });
+
+      // Historique commandes payées
+      const q = query(
+        collection(db, "transactions"),
+        where("userId", "==", u.uid),
+        where("type", "==", "client_payment"),
+        orderBy("createdAt", "desc"),
+        limit(30)
+      );
+      const unsubTx = onSnapshot(q, snap => {
+        setTransactions(snap.docs.map(d => ({ id: d.id, ...d.data() })));
+        setLoading(false);
+      });
+
+      return () => { unsubW(); unsubTx(); };
     });
     return () => unsub();
   }, [router]);
 
-  if (loading) return <div className="min-h-screen flex items-center justify-center"><Loader2 className="h-8 w-8 animate-spin text-primary" /></div>;
+  if (loading) return (
+    <div className="min-h-screen bg-gray-50 flex items-center justify-center">
+      <Loader2 className="h-6 w-6 animate-spin text-orange-500" />
+    </div>
+  );
+
+  const fmt = (n: number) => `$${Math.abs(n).toFixed(2)}`;
 
   return (
-    <div className="container max-w-2xl py-8 px-4 space-y-6">
-      <h1 className="text-2xl font-bold">Portefeuille</h1>
+    <div className="min-h-screen bg-gray-50 pb-24">
+      <div className="bg-white border-b px-4 pt-12 pb-4">
+        <h1 className="text-xl font-black text-gray-900">Mon compte</h1>
+      </div>
 
-      {/* Balance principale */}
-      <Card className="bg-gradient-to-br from-orange-500 to-amber-500 text-white border-0">
-        <CardContent className="pt-6 pb-6">
-          <div className="flex items-center gap-3 mb-4">
-            <div className="h-12 w-12 rounded-full bg-white/20 flex items-center justify-center">
-              <Wallet className="h-6 w-6 text-white" />
+      <div className="px-4 py-5 space-y-4">
+        {/* Solde + Points */}
+        <div className="grid grid-cols-2 gap-3">
+          <div className="bg-orange-500 rounded-3xl p-4 text-white">
+            <Wallet className="h-5 w-5 mb-2 opacity-80" />
+            <p className="text-2xl font-black">{fmt(wallet?.balance || 0)}</p>
+            <p className="text-xs opacity-80 mt-0.5">Crédit FastDép</p>
+          </div>
+          <div className="bg-yellow-400 rounded-3xl p-4 text-yellow-900">
+            <Star className="h-5 w-5 mb-2 opacity-80" />
+            <p className="text-2xl font-black">{wallet?.loyaltyPoints || 0}</p>
+            <p className="text-xs opacity-80 mt-0.5">Points fidélité</p>
+          </div>
+        </div>
+
+        {/* Stats */}
+        <div className="bg-white rounded-3xl border border-gray-100 p-4">
+          <div className="grid grid-cols-2 gap-4">
+            <div className="text-center">
+              <p className="text-2xl font-black text-gray-900">{wallet?.ordersCount || 0}</p>
+              <p className="text-xs text-gray-400 mt-0.5">Commandes</p>
             </div>
-            <div>
-              <p className="text-white/80 text-sm">Solde disponible</p>
-              <p className="text-3xl font-bold">${balance.toFixed(2)}</p>
+            <div className="text-center">
+              <p className="text-2xl font-black text-orange-500">{fmt(wallet?.totalSpent || 0)}</p>
+              <p className="text-xs text-gray-400 mt-0.5">Total dépensé</p>
             </div>
           </div>
-          <div className="flex items-center gap-2 bg-white/20 rounded-xl px-3 py-2 w-fit">
-            <Star className="h-4 w-4 text-yellow-300 fill-yellow-300" />
-            <span className="text-sm font-semibold">{loyaltyPoints} points de fidélité</span>
-          </div>
-        </CardContent>
-      </Card>
+        </div>
 
-      {/* Infos points */}
-      <Card>
-        <CardContent className="pt-4 pb-4">
-          <div className="flex items-center justify-between">
-            <div>
-              <p className="text-sm font-medium">Points de fidélité</p>
-              <p className="text-xs text-muted-foreground">1 point = 0,01 $ de rabais</p>
-            </div>
-            <div className="text-right">
-              <p className="text-lg font-bold text-orange-600">{loyaltyPoints} pts</p>
-              <p className="text-xs text-muted-foreground">= ${(loyaltyPoints * 0.01).toFixed(2)}</p>
-            </div>
-          </div>
-        </CardContent>
-      </Card>
+        {/* Points fidélité info */}
+        <div className="bg-yellow-50 border border-yellow-200 rounded-2xl p-3 flex items-center gap-2">
+          <Gift className="h-4 w-4 text-yellow-600 shrink-0" />
+          <p className="text-xs text-yellow-700">
+            <strong>1 point = 1$</strong> dépensé · Échangeables en crédit FastDép
+          </p>
+        </div>
 
-      {/* Transactions */}
-      <Card>
-        <CardHeader>
-          <CardTitle className="text-base">Historique des transactions</CardTitle>
-        </CardHeader>
-        <CardContent>
+        {/* Historique */}
+        <div>
+          <p className="text-sm font-bold text-gray-500 uppercase tracking-wide mb-3">Historique</p>
           {transactions.length === 0 ? (
-            <div className="text-center py-8">
-              <Wallet className="h-12 w-12 mx-auto text-muted-foreground/30 mb-3" />
-              <p className="text-muted-foreground text-sm">Aucune transaction pour le moment</p>
-              <p className="text-xs text-muted-foreground mt-1">Vos transactions apparaîtront ici après votre première commande</p>
+            <div className="bg-white rounded-2xl border border-gray-100 p-8 text-center">
+              <Package className="h-8 w-8 text-gray-300 mx-auto mb-2" />
+              <p className="text-gray-400 text-sm">Aucune transaction</p>
             </div>
           ) : (
-            <div className="space-y-3">
-              {transactions.map((tx, i) => (
-                <div key={tx.id || i}>
-                  {i > 0 && <Separator />}
-                  <div className="flex items-center justify-between py-2">
-                    <div className="flex items-center gap-3">
-                      <div className={`h-8 w-8 rounded-full flex items-center justify-center ${tx.type === "credit" ? "bg-green-100" : "bg-red-100"}`}>
-                        {tx.type === "credit"
-                          ? <ArrowDownLeft className="h-4 w-4 text-green-600" />
-                          : <ArrowUpRight className="h-4 w-4 text-red-600" />
-                        }
-                      </div>
-                      <div>
-                        <p className="text-sm font-medium">{tx.description}</p>
-                        <p className="text-xs text-muted-foreground">{tx.date}</p>
-                      </div>
+            <div className="space-y-2">
+              {transactions.map(t => {
+                const date = t.createdAt?.toDate ? t.createdAt.toDate() : new Date();
+                return (
+                  <div key={t.id} className="bg-white rounded-2xl border border-gray-100 px-4 py-3 flex items-center gap-3">
+                    <div className="w-9 h-9 rounded-xl bg-red-50 flex items-center justify-center shrink-0">
+                      <ArrowDownLeft className="h-4 w-4 text-red-400" />
                     </div>
-                    <span className={`font-bold text-sm ${tx.type === "credit" ? "text-green-600" : "text-red-600"}`}>
-                      {tx.type === "credit" ? "+" : "-"}${tx.amount.toFixed(2)}
-                    </span>
+                    <div className="flex-1 min-w-0">
+                      <p className="text-sm font-semibold text-gray-900 truncate">{t.description}</p>
+                      <p className="text-xs text-gray-400">
+                        {date.toLocaleDateString("fr-CA")} · {t.paymentMethod}
+                      </p>
+                    </div>
+                    <p className="text-red-500 font-black shrink-0">-{fmt(t.total)}</p>
                   </div>
-                </div>
-              ))}
+                );
+              })}
             </div>
           )}
-        </CardContent>
-      </Card>
+        </div>
+      </div>
     </div>
   );
 }

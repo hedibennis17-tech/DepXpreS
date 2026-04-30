@@ -120,6 +120,8 @@ export default function DashboardPage() {
         weekRevenue: weekOrders.reduce((sum, o) => sum + o.total, 0),
         totalOrders: processedOrders.length,
         totalRevenue: processedOrders.reduce((sum, o) => sum + o.total, 0),
+        totalCommission: processedOrders.reduce((sum, o) => sum + (o.deliveryFee || 5) * 0.20, 0),
+        totalDriverPayouts: processedOrders.reduce((sum, o) => sum + (o.driverFee || (o.deliveryFee || 5) * 0.80), 0),
         activeOrders: processedOrders.filter(o => ACTIVE_STATUSES.includes(o.status)).length,
         completedToday: todayOrders.filter(o => COMPLETED_STATUSES.includes(o.status)).length,
         cancelledToday: todayOrders.filter(o => o.status === "cancelled").length,
