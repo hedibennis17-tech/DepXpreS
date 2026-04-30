@@ -1,6 +1,11 @@
 import { initializeApp, getApps, getApp } from "firebase/app";
 import { getFirestore } from "firebase/firestore";
-import { getAuth, browserLocalPersistence, setPersistence } from "firebase/auth";
+import {
+  initializeAuth,
+  getAuth,
+  browserLocalPersistence,
+  indexedDBLocalPersistence,
+} from "firebase/auth";
 import { getStorage } from "firebase/storage";
 
 const firebaseConfig = {
@@ -14,13 +19,24 @@ const firebaseConfig = {
 
 const app = getApps().length ? getApp() : initializeApp(firebaseConfig);
 
-export const auth = getAuth(app);
-export const db = getFirestore(app);
-export const storage = getStorage(app);
-
-// Force localStorage — évite IndexedDB qui plante sur Firefox/mode privé
-if (typeof window !== "undefined") {
-  setPersistence(auth, browserLocalPersistence).catch(() => {});
+// Auth avec persistence localStorage dès l'init
+// localStorage = session survit aux changements de page, onglets, refresh
+function createAuth() {
+  if (typeof window === "undefined") return getAuth(app);
+  try {
+    return initializeAuth(app, {
+      persistence: [
+        browserLocalPersistence,   // Principal — survit aux refreshs
+        indexedDBLocalPersistence, // Fallback si localStorage bloqué
+      ],
+    });
+  } catch {
+    // initializeAuth déjà appelé — récupérer l'instance existante
+    return getAuth(app);
+  }
 }
 
+export const auth = createAuth();
+export const db = getFirestore(app);
+export const storage = getStorage(app);
 export default app;
