@@ -109,7 +109,7 @@ function loadMaps(): Promise<void> {
     (window as any)[cb] = () => { delete (window as any)[cb]; resolve(); };
     const s = document.createElement("script");
     s.onerror = () => { _mapsPromise = null; reject(new Error("Maps SDK failed")); };
-    s.src = `https://maps.googleapis.com/maps/api/js?key=${GMAPS_KEY}&libraries=geometry,marker&callback=${cb}&loading=async`;
+    s.src = `https://maps.googleapis.com/maps/api/js?key=${GMAPS_KEY}&v=beta&libraries=geometry,marker&callback=${cb}&loading=async`;
     document.head.appendChild(s);
     setTimeout(() => { _mapsPromise = null; reject(new Error("Maps timeout")); }, 15000);
   });
@@ -164,6 +164,42 @@ export default function NavigationContent() {
   // Auth
   useEffect(() => {
     return onAuthStateChanged(auth, u => { if (u) uidRef.current = u.uid; });
+  }, []);
+
+  // DeviceOrientation — boussole native pour heading quand immobile
+  useEffect(() => {
+    function handleOrientation(e: DeviceOrientationEvent) {
+      // alpha = rotation autour axe Z (cap magnétique)
+      const alpha = (e as any).webkitCompassHeading ?? e.alpha;
+      if (alpha === null || alpha === undefined) return;
+      const hdg = Math.round(alpha);
+      // Seulement mettre à jour si pas en mouvement (GPS heading prioritaire)
+      if (bearingRef.current === 0 || bearingRef.current === null) {
+        bearingRef.current = hdg;
+        setBearing(hdg);
+        if (mapObj.current) {
+          mapObj.current.moveCamera({
+            center: mapObj.current.getCenter(),
+            zoom: 18,
+            tilt: 45,
+            heading: hdg,
+          });
+        }
+        if (driverElRef.current) {
+          driverElRef.current.style.transform = `rotate(${hdg}deg)`;
+        }
+      }
+    }
+    // iOS 13+ nécessite permission
+    if (typeof (DeviceOrientationEvent as any).requestPermission === "function") {
+      (DeviceOrientationEvent as any).requestPermission()
+        .then((perm: string) => {
+          if (perm === "granted") window.addEventListener("deviceorientation", handleOrientation, true);
+        }).catch(() => {});
+    } else {
+      window.addEventListener("deviceorientation", handleOrientation, true);
+    }
+    return () => window.removeEventListener("deviceorientation", handleOrientation, true);
   }, []);
 
   // ── Lire params URL ───────────────────────────────────────────────────────
@@ -460,21 +496,31 @@ export default function NavigationContent() {
         if (pausedRef.current) return;
         const loc = { lat: pos.coords.latitude, lng: pos.coords.longitude };
 
-        // Calculer le vrai bearing entre la position précédente et actuelle
-        let hdg = pos.coords.heading ?? 0;
-        if (prevPos.current && (prevPos.current.lat !== loc.lat || prevPos.current.lng !== loc.lng)) {
-          const computed = computeBearing(prevPos.current, loc);
-          // Utiliser le bearing calculé si le GPS heading n'est pas fiable
-          if (computed > 0) hdg = computed;
+        // Bearing: priorité GPS heading → bearing calculé → bearing précédent
+        let hdg = bearingRef.current; // Garder le dernier bearing connu
+        
+        // 1. GPS heading natif (le plus précis quand disponible)
+        if (pos.coords.heading !== null && pos.coords.heading > 0) {
+          hdg = pos.coords.heading;
         }
+        // 2. Bearing calculé entre 2 positions (fiable en mouvement)
+        else if (prevPos.current) {
+          const dlat = Math.abs(loc.lat - prevPos.current.lat);
+          const dlng = Math.abs(loc.lng - prevPos.current.lng);
+          if (dlat > 0.00001 || dlng > 0.00001) { // Seulement si vraiment en mouvement
+            const computed = computeBearing(prevPos.current, loc);
+            if (computed >= 0) hdg = computed;
+          }
+        }
+        
         prevPos.current = loc;
         bearingRef.current = hdg;
         setBearing(hdg);
 
-        // Mettre à jour la flèche chauffeur (elle tourne avec le bearing)
+        // Mettre à jour la flèche + carte
         placeDriverMarker(loc, hdg);
 
-        // moveCamera atomique — carte tourne selon le bearing
+        // moveCamera atomique — heading-up
         if (mapObj.current) {
           mapObj.current.moveCamera({
             center: loc,
