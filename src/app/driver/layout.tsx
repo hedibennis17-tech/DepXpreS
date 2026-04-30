@@ -26,6 +26,15 @@ export default function DriverLayout({ children }: { children: React.ReactNode }
   // Pages publiques — pas besoin d'auth
   const isPublicPage = ["/driver/login", "/driver/signup"].some(p => pathname.startsWith(p));
 
+  // Vérifier commande active
+  useEffect(() => {
+    const check = () => setHasActiveOrder(!!localStorage.getItem("activeOrderId"));
+    check();
+    window.addEventListener("storage", check);
+    const interval = setInterval(check, 3000);
+    return () => { window.removeEventListener("storage", check); clearInterval(interval); };
+  }, []);
+
   useEffect(() => {
     if (isPublicPage) { setLoading(false); return; }
     // Timeout 8s — si Firebase IndexedDB bloqué, débloquer quand même
@@ -124,20 +133,25 @@ export default function DriverLayout({ children }: { children: React.ReactNode }
               </Link>
             ))}
             <div className="border-t border-white/5">
-              <button onClick={async () => {
-                // Vérifier si une commande est en cours
-                const activeOrderId = localStorage.getItem("activeOrderId");
-                if (activeOrderId) {
-                  const confirm = window.confirm("⚠️ Vous avez une livraison en cours! Si vous vous déconnectez, la commande restera assignée à vous. Continuer?");
-                  if (!confirm) return;
-                }
-                await signOut(auth);
-                router.push("/driver/login");
-              }}
-                className="w-full flex items-center gap-3 px-4 py-3 hover:bg-red-500/5 text-gray-500 hover:text-red-400 transition-colors">
-                <LogOut className="h-4 w-4" />
-                <span className="text-sm font-medium">Déconnexion</span>
-              </button>
+              {hasActiveOrder ? (
+                // BLOQUÉ — commande en cours
+                <div className="flex items-center gap-3 px-4 py-3 opacity-40 cursor-not-allowed">
+                  <LogOut className="h-4 w-4 text-gray-600" />
+                  <div className="flex-1">
+                    <span className="text-sm font-medium text-gray-600">Déconnexion</span>
+                    <p className="text-xs text-red-400 font-semibold">🚫 Livraison en cours</p>
+                  </div>
+                </div>
+              ) : (
+                <button onClick={async () => {
+                  await signOut(auth);
+                  router.push("/driver/login");
+                }}
+                  className="w-full flex items-center gap-3 px-4 py-3 hover:bg-red-500/5 text-gray-500 hover:text-red-400 transition-colors">
+                  <LogOut className="h-4 w-4" />
+                  <span className="text-sm font-medium">Déconnexion</span>
+                </button>
+              )}
             </div>
           </div>
         )}
