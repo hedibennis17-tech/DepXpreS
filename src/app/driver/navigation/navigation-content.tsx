@@ -12,7 +12,7 @@ import {
 
 const GMAPS_KEY = "AIzaSyAmDwm43D52jpgDp1MiNg_TvLBn_fDTsU8";
 // ⬇️ Remplacer par ton Map ID vectoriel Google Cloud
-const MAP_ID = "DEMO_MAP_ID";
+const MAP_ID = "5988f952fa7dbd4b9b70abd9";
 
 // ── Routes API ────────────────────────────────────────────────────────────────
 async function fetchRoute(
